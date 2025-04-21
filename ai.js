@@ -150,5 +150,35 @@ async function generateReplyFromAINurse(text, chats) {
   }
 }
 
+async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time){
+  try {
+    console.log("AI is generating a message...");
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) to the staffing coordinator. You can only reply with true or false. return an object consisting a friendly message suitable to send the user and another value called confirmation which should contain true or false. like this 
+      {
+        "message": "Friendly text you want to send to user.",
+        confirmation: true or false
+      
+      }
+        Always reply in this JSON format:
+      {
+        "message": "Friendly text you want to send to user.",
+        confirmation: true or false
+      }
+
+      only reply with an json object in the above format.
+      the message should look like it was sent by a human.
+      once you get the full information (make sure you have the full information), just say okay let me check or something like that. Do not ask for confirmation like "is this information correct".
+      Message from sender: "${text}"`,
+    });
+
+    return response.text; // Return the generated reply text from Gemini
+
+  } catch (error) {
+    console.error('Error generating response:', error);
+    return "Sorry, something went wrong."; // Fallback message if error occurs
+  }
+}
 // Export the function to use in other files
-module.exports = { generateReplyFromAI, generateReplyFromAINurse };
+module.exports = { generateReplyFromAI, generateReplyFromAINurse, generateMessageForNurseAI };

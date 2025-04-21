@@ -1,3 +1,4 @@
+const { generateMessageForNurseAI } = require('../ai.js');
 const pool = require('../db.js');
 const axios = require('axios');
 
@@ -40,8 +41,7 @@ async function search_nurses(nurse_type, shift, location) {
 async function send_nurses_message(nurses, nurse_type, shift, location, hospital_name, shift_id, sender, date, start_time, end_time) {
   for (const nurse of nurses) {
 
-    const phoneNumber = nurse.mobile_number; // adjust field name based on your table
-    const message = `Hi! A ${nurse_type} nurse is needed for a ${shift} shift at ${hospital_name},${location} on ${date} from ${start_time} to ${end_time}. Reply if you're available.`;
+    const phoneNumber = nurse.mobile_number;
     const nurse_availability = await check_nurse_availability(nurse.id, shift_id);
     if (nurse_availability) {
       await pool.query(`
@@ -49,6 +49,15 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
         (sender, receiver, message, shift_id)
         VALUES ($1, $2, $3, $4)
       `, [sender, phoneNumber, message, shift_id]); 
+      const message = generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time)
+      await pool.query(
+        `
+        INSERT INTO nurse_chat_history 
+        (messages, phone_number, message_type)
+        VALUES ($1, $2, $3)
+        `,
+        [message,phoneNumber,'sent']
+      );
       try {
         const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
           recipient: phoneNumber,

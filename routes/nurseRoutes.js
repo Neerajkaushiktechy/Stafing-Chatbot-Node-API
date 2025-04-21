@@ -10,6 +10,18 @@ router.post('/chat_nurse', async (req, res) => {
     const { sender, text } = req.body; 
 
     console.log('Received:', sender, text);
+    try {
+        await pool.query(
+            `
+            INSERT INTO nurse_chat_history 
+            (messages, phone_number, message_type)
+            VALUES ($1, $2, $3)
+            `,
+            [text,sender,'received']
+          );
+    } catch (error) {
+        console.error('Error updating chat history:', error);
+    }
 
     try {
         const { rows } = await pool.query(
@@ -26,7 +38,7 @@ router.post('/chat_nurse', async (req, res) => {
         const shift_id = rows.length > 0 ? rows[0].shift_id : null;
 
         console.log("Found shift_id:", shift_id);
-        
+
         let replyMessage = await generateReplyFromAINurse(text);
         console.log("Raw reply generated:", replyMessage);
 
