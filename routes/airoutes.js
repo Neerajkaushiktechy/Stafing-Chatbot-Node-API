@@ -1,5 +1,5 @@
 const express = require('express');
-const { generateReplyFromAI } = require('../ai.js');
+const { generateReplyFromAI } = require('../helper/promptHelper.js');
 const router = express.Router();
 const { search_nurses, send_nurses_message } = require('../controller/nurse_controller.js');
 const { create_shift } = require('../controller/shift_controller.js');

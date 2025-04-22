@@ -1,7 +1,7 @@
 const { GoogleGenAI } = require("@google/genai");
 
 // Initialize GoogleGenAI with your API key
-const ai = new GoogleGenAI({ apiKey: "AIzaSyCrWGYo9aS0UbtchBiKgcnQq-sfLQvZ3Hg" });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function generateReplyFromAI(text, pastMessages) {
   try {

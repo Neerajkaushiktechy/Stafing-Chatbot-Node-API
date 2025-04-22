@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { generateReplyFromAINurse } = require('../ai.js');
+const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
 const { check_shift_status } = require('../controller/shift_controller.js');
