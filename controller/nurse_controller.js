@@ -1,4 +1,4 @@
-const { generateMessageForNurseAI } = require('../ai.js');
+const { generateMessageForNurseAI } = require('../helper/promptHelper.js');
 const pool = require('../db.js');
 const axios = require('axios');
 
