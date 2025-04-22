@@ -1,7 +1,7 @@
 const { generateMessageForNurseAI } = require('../helper/promptHelper.js');
 const pool = require('../db.js');
 const axios = require('axios');
-
+require('dotenv').config();
 async function search_nurses(nurse_type, shift, location) {
   try {
     const result = await pool.query(`

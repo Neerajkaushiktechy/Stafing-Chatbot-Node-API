@@ -1,6 +1,6 @@
 const pool = require('../db.js');
 const axios = require('axios');
-
+require('dotenv').config();
 async function update_coordinator(shift_id, nurse_phoneNumber) {
     const nurse = await get_nurse_info(nurse_phoneNumber);
     console.log("Nurse fetched:", nurse);

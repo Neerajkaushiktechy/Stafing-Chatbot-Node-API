@@ -5,7 +5,7 @@ const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
 const { check_shift_status } = require('../controller/shift_controller.js');
 const axios = require('axios');
-
+require('dotenv').config();
 router.post('/chat_nurse', async (req, res) => {
     const { sender, text } = req.body; 
 

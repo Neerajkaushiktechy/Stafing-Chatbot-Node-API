@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const nurseRoutes = require('./routes/nurseRoutes.js');
 const aiRoutes = require('./routes/airoutes.js');
 const app = express();
+require('dotenv').config();
 const port = process.env.PORT || 3000;
 require('dotenv').config();
 // Middleware

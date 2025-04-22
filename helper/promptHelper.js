@@ -1,4 +1,5 @@
 const { GoogleGenAI } = require("@google/genai");
+require('dotenv').config();
 
 // Initialize GoogleGenAI with your API key
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -102,7 +103,7 @@ async function generateReplyFromAI(text, pastMessages) {
       Bot: "okay I will look a for an LVN nurse for covering a shift at Fortis Delhi on 25 feb 2025 from 4PM to 12PM"
 
   The chat history will also be provided to you.
-    
+  Make sure the messages remain relevant to the booking the user is trying to make without bringing up other booking he has made.
   Also check if the date provided is valid or not,
   for example:-
   User: I need a nurse on 30 Feb 2025
