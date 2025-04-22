@@ -6,7 +6,6 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
     console.log("Nurse fetched:", nurse);
 
     await update_shift_status(shift_id, nurse.id);
-    await assign_shift(shift_id, nurse.id);
     const recipient = await get_coordinator_number(shift_id);
     const shiftInfo = await get_shift_information(shift_id);
 
@@ -63,21 +62,6 @@ async function update_shift_status(shift_id, nurse_id) {
     }
 }
 
-async function assign_shift(shift_id, nurse_id) {
-    try {
-        await pool.query(`
-           INSERT INTO nurse_shift_assignments 
-           (nurse_id, shift_id) 
-           VALUES ($1, $2);
-        `, [nurse_id,shift_id]);
-
-        console.log(`Shift ${shift_id} updated to filled with nurse ${nurse_id}`);
-    } catch (error) {
-        console.error('Error updating shift status:', error);
-    }
-    
-}
-
 async function get_coordinator_number(shift_id) {
     try {
         const { rows } = await pool.query(`
@@ -110,7 +94,32 @@ async function get_shift_information(shift_id) {
     }
 }
 
+async function update_coordinator_chat_history(sender, text, type) {
+    try {
+      await pool.query(`
+        INSERT INTO coordinator_chat_data
+        (sender, message, message_type)
+        VALUES ($1, $2, $3)
+      `, [sender, text, type]);
+      console.log('Message successfully inserted for coordinator.');
+    } catch (err) {
+      console.error('Error updating coordinator chat history:', err);
+    }
+  }
 
+async function get_coordinator_chat_data(sender){
+    try {
+        const result = await pool.query(`
+            SELECT message from coordinator_chat_data
+            WHERE sender = $1
+            `,[sender])
+        console.log("Coordinator chat history")
+        const pastMessages = result.rows.map(row => row.message);
+        return pastMessages
+    } catch (error) {
+        console.error("Error getting coordinator chat data", error)
+    }
+}
 module.exports = {
-    update_coordinator
+    update_coordinator, update_coordinator_chat_history, get_coordinator_chat_data
 };

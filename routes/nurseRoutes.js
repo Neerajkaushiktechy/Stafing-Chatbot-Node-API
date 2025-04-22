@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { generateReplyFromAINurse } = require('../ai.js');
+const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
 const { check_shift_status } = require('../controller/shift_controller.js');
@@ -10,6 +10,18 @@ router.post('/chat_nurse', async (req, res) => {
     const { sender, text } = req.body; 
 
     console.log('Received:', sender, text);
+    try {
+        await pool.query(
+            `
+            INSERT INTO nurse_chat_data 
+            (message, mobile_number, message_type)
+            VALUES ($1, $2, $3)
+            `,
+            [text,sender,'received']
+          );
+    } catch (error) {
+        console.error('Error updating chat history:', error);
+    }
 
     try {
         const { rows } = await pool.query(
@@ -26,8 +38,16 @@ router.post('/chat_nurse', async (req, res) => {
         const shift_id = rows.length > 0 ? rows[0].shift_id : null;
 
         console.log("Found shift_id:", shift_id);
-        
-        let replyMessage = await generateReplyFromAINurse(text);
+
+        const result = await pool.query(`
+            SELECT message
+            FROM nurse_chat_data
+            WHERE mobile_number = $1
+          `, [sender]);
+          
+          const pastMessages = result.rows.map(row => row.message);
+        console.log("past messages", pastMessages);
+        let replyMessage = await generateReplyFromAINurse(text,pastMessages);
         console.log("Raw reply generated:", replyMessage);
 
         // Check if replyMessage is a string and starts with ```json
