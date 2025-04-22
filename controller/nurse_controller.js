@@ -114,8 +114,8 @@ async function check_nurse_availability(nurse_id, shift_id) {
 
     // Get all assigned shift IDs for the nurse
     const { rows: assignedShifts } = await pool.query(`
-      SELECT shift_id 
-      FROM nurse_shift_assignments 
+      SELECT id
+      FROM shift_tracker 
       WHERE nurse_id = $1
     `, [nurse_id]);
 
@@ -124,7 +124,7 @@ async function check_nurse_availability(nurse_id, shift_id) {
         SELECT date, start_time, end_time 
         FROM shift_tracker 
         WHERE id = $1
-      `, [row.shift_id]);
+      `, [row.id]);
 
       if (!assigned) continue;
 

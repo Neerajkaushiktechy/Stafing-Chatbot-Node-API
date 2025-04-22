@@ -63,21 +63,6 @@ async function update_shift_status(shift_id, nurse_id) {
     }
 }
 
-async function assign_shift(shift_id, nurse_id) {
-    try {
-        await pool.query(`
-           INSERT INTO nurse_shift_assignments 
-           (nurse_id, shift_id) 
-           VALUES ($1, $2);
-        `, [nurse_id,shift_id]);
-
-        console.log(`Shift ${shift_id} updated to filled with nurse ${nurse_id}`);
-    } catch (error) {
-        console.error('Error updating shift status:', error);
-    }
-    
-}
-
 async function get_coordinator_number(shift_id) {
     try {
         const { rows } = await pool.query(`
