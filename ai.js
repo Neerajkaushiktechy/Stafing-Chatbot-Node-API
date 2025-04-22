@@ -3,7 +3,7 @@ const { GoogleGenAI } = require("@google/genai");
 // Initialize GoogleGenAI with your API key
 const ai = new GoogleGenAI({ apiKey: "AIzaSyCrWGYo9aS0UbtchBiKgcnQq-sfLQvZ3Hg" });
 
-async function generateReplyFromAI(text) {
+async function generateReplyFromAI(text, pastMessages) {
   try {
     console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
@@ -15,9 +15,9 @@ async function generateReplyFromAI(text) {
       name of hospital where the nurse is required
       The date of the shift 
       and
-      the start and end_time of the shift
+      the start and end time of the shift
       
-      Convert the date into a valid date format for PostgreSQL database and do the same for time as well. a Always reply in this JSON format:
+      Convert the date into a valid date format for PostgreSQL database and do the same for time as well. Always reply in this JSON format:
       {
         "message": "Friendly text you want to send to user.",
         "nurse_details": {
@@ -33,55 +33,98 @@ async function generateReplyFromAI(text) {
 
       - If the user has not provided full nurse details yet, set "nurse_details" as null. And Keep asking them for the full information
       - If the user has provided details for multiple nurses, fill them in "nurse_details" as an array of objects.
-      - If the user has provided details, fill them in "nurse_details".
+      - once the user has provided details, fill them in "nurse_details".
       for example:-
-      AI Bot: Hi Miriam! Let me know what shifts you need covered this week and I'll start looking!  
-(nurse_details: null)
+        User: Hi
+        Bot: Hello there how may I help you today
+        User: I need to make a booking
+        Bot: I can help you with that, just tell me your requirements and I will start looking.
+        User: I need an RN nurse at Fortis Delhi
+        Bot: Okay, could you please tell me the shift type, date and start and end timings of your shift.
+        User: sure 25 april 2025, PM shift from 3PM to 11PM.
+        Bot: Okay kindly wait and I will get back to you.
+        User: okay thanks
+        Bot: no worries
 
-Miriam (Staffing Coordinator): Will do. Give me a minute and I'll put it together.  
+      make sure the user has provided all fields before filling the nurse_details if any of the fields remain empty keep the nurse_details as null.
+      for example:-
+        User: Hi
+        Bot: {
+          message: "Hello there, how may I help you today",
+          nurse_details: null
+        }
 
-AI Bot: Standing by!  
-(nurse_details: null)
+        User: I need to make a booking
+        Bot: {
+          message: "I can help you with that, just tell me your requirements and I will start looking.",
+          nurse_details: null
+        }
 
-Miriam: Here's my needs for the week:  
-- 2/28 PM CNA  
-- 2/30 PM CNA  
-- 3/2 AM LVN  
-- 3/2 NOC CNA  
-Let me know what you can cover! Thanks
+        User: I need an RN nurse at Fortis Delhi
+        Bot: {
+          message: "Okay, could you please tell me the shift type, date, and start and end timings of your shift?",
+          nurse_details: null
+        }
 
-AI Bot: Got it, Miriam! I see you need:  
-- 2/28 PM CNA  
-- 2/30 PM CNA  
-- 3/2 AM LVN  
-- 3/2 NOC CNA
+        User: Sure, 25 April 2025, PM shift from 3 PM to 11 PM.
+        Bot: {
+          message: "Okay kindly wait and I will get back to you.",
+          nurse_details: {
+            nurse_type: "RN",
+            shift: "PM",
+            location: "Delhi",
+            hospital_name: "Fortis",
+            date: "2025-04-25",
+            start_time: "15:00",
+            end_time: "23:00"
+          }
+        }
 
-I'll start looking for coverage now. I'll confirm once I find someone to cover.  
-(nurse_details: {"nurse_type": "CNA", "shift": "PM", "location": null, hospital_name})  
-(nurse_details: {"nurse_type": "CNA", "shift": "PM", "location": null, hospital_name})  
-(nurse_details: {"nurse_type": "LVN", "shift": "AM", "location": null, hospital_name})  
-(nurse_details: {"nurse_type": "CNA", "shift": "PM", "location": null, hospital_name})
+        User: Okay, thanks
+        Bot: {
+          message: "No worries.",
+          nurse_details: null
+        }
 
-Miriam: Thanks for your help, AI Bot!  
-make sure you do not use the name miriam for all the messages as the name is just for an example
-make sure the user has provided all fields before filling the nurse_details if any of the fields remain empty keep the nurse_details as null.
-for example:-
-user: I need a RN 
-bot: {
-message: sure! can you tell me the hospital name and the location at which you require the nurse?
-}
-finally the response should be generated like this 
-{
-  "message": "Friendly text you want to send to user.",
-  "nurse_details": {
-    "nurse_type": "",
-    "shift": "",
-    "location": "",
-    "hospital_name": "",
-    "date": "",
-    "start_time": "",
-    "end_time": ""
-  }}
+      Do not ask the user for information he has already provided.
+      for example:-
+      **Bad Example**
+      user: "Hey I need an LVN nurse in Delhi"
+      Bot: "Sure! Could you please tell me the name of the hospital the date and the timings when you require the nurse"
+      user: "Fortis hospital 25 feb 2025 from 4PM to 11PM"
+      Bot: "okay could you tell the type of nurse and the location"
+
+  Instead make use of chat history to find the information already provided by reading the latest messages.
+      **Good Example**
+      user: "Hey I need an LVN nurse in Delhi"
+      Bot: "Sure! Could you please tell me the name of the hospital the date and the timings when you require the nurse"
+      user: "Fortis hospital 25 feb 2025 from 4PM to 11PM"
+      Bot: "okay I will look a for an LVN nurse for covering a shift at Fortis Delhi on 25 feb 2025 from 4PM to 12PM"
+
+  The chat history will also be provided to you.
+    
+  Also check if the date provided is valid or not,
+  for example:-
+  User: I need a nurse on 30 Feb 2025
+  Bot: I am sorry but the date is incorrect (or any other witty response)
+
+  another example:-
+
+  User: I need a nurse for 40 March
+  Bot: (Witty response)
+  
+  finally the response should be generated like this 
+  {
+    "message": "Friendly text you want to send to user.",
+    "nurse_details": {
+      "nurse_type": "",
+      "shift": "",
+      "location": "",
+      "hospital_name": "",
+      "date": "",
+      "start_time": "",
+      "end_time": ""
+    }}
 
   not like this 
   json {
@@ -97,7 +140,7 @@ finally the response should be generated like this
     }
   }
     So, if the client says ' I need a (nurse tpye) at (hospital name) (location) for (shift) on (date) from (start_time) to (end_time) extract the info like:-
-    For example:- I need an RN at Fortis Dehradun for an AM shift
+    For example:- I need an RN at Fortis Dehradun for an AM shift on 28 August 2025 from 10AM to 12PM
     {
       "nurse_type": "RN",
       "shift": "AM",
@@ -108,7 +151,8 @@ finally the response should be generated like this
       "end_time": "12:00:00"
     }
       make use of 24 hour clock to differ between AM and PM
-      Message from sender: "${text}"`,
+      Message from sender: "${text}"
+      Past Message history: ${pastMessages}`,
     });
 
     return response.text; // Return the generated reply text from Gemini

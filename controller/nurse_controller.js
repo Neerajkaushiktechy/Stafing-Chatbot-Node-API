@@ -3,39 +3,19 @@ const pool = require('../db.js');
 const axios = require('axios');
 
 async function search_nurses(nurse_type, shift, location) {
-    try {
-      // Construct the search query
-      let query = `
-        SELECT * FROM nurses
-        WHERE 1=1
-      `;
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM nurses
+      WHERE nurse_type ILIKE $1 AND shift ILIKE $2 AND location ILIKE $3
+    `, [nurse_type, shift, location]);
   
-      const queryParams = [];
+    return result.rows;
   
-      // Conditionally add filters based on the provided values
-      if (nurse_type) {
-        query += ` AND nurse_type = $${queryParams.length + 1}`;
-        queryParams.push(nurse_type);
-      }
+  } catch (err) {
+    console.error('Error searching nurses:', err);
+  }
   
-      if (shift) {
-        query += ` AND shift = $${queryParams.length + 1}`;
-        queryParams.push(shift);
-      }
-  
-      if (location) {
-        query += ` AND location = $${queryParams.length + 1}`;
-        queryParams.push(location);
-      }
-  
-      // Run the query
-      const result = await pool.query(query, queryParams);
-      console.log('Search results:', result.rows);
-      return result.rows;
-  
-    } catch (err) {
-      console.error('Error searching nurses:', err);
-    }
 }
 
 async function send_nurses_message(nurses, nurse_type, shift, location, hospital_name, shift_id, sender, date, start_time, end_time) {

@@ -3,13 +3,16 @@ const { generateReplyFromAI } = require('../ai.js');
 const router = express.Router();
 const { search_nurses, send_nurses_message } = require('../controller/nurse_controller.js');
 const { create_shift } = require('../controller/shift_controller.js');
+const { update_coordinator_chat_history, get_coordinator_chat_data } = require('../controller/coordinator_controller.js');
 router.post('/chat', async (req, res) => {
     const { sender, text } = req.body; 
 
     console.log('Received:', sender, text);
 
+    await update_coordinator_chat_history(sender,text, "received")
+    const pastMessages = await get_coordinator_chat_data(sender)
     try {
-        let replyMessage = await generateReplyFromAI(text);
+        let replyMessage = await generateReplyFromAI(text,pastMessages);
         console.log("Raw reply generated:", replyMessage);
 
         // Check if replyMessage is a string and starts with ```json
@@ -30,16 +33,7 @@ router.post('/chat', async (req, res) => {
                 return res.status(500).json({ message: "Invalid AI response format." });
             }
         }
-        // if (replyMessage.nurse_details) {
-        //     const { nurse_type, shift, location, hospital_name, date, start_time, end_time} = replyMessage.nurse_details;
-        //     const nurse = { nurse_type, shift, location, hospital_name,date, start_time, end_time};
-        //     console.log('Nurse details:', nurse);
-        //     const shift_id = await create_shift(sender, nurse_type, shift, location, hospital_name, date, start_time, end_time);
-        //     const nurses = await search_nurses(nurse_type, shift, location,);
-        //     console.log('Received:', sender, text);
-        //     console.log("shift id created",shift_id);
-        //     await send_nurses_message(nurses, nurse_type, shift, location,hospital_name,shift_id,sender, date, start_time, end_time);
-        // }
+
         if (replyMessage.nurse_details) {
             const nurseDetailsArray = Array.isArray(replyMessage.nurse_details) ? replyMessage.nurse_details : [replyMessage.nurse_details];
           
@@ -58,7 +52,7 @@ router.post('/chat', async (req, res) => {
               await send_nurses_message(nurses, nurse_type, shift, location, hospital_name, shift_id, sender, date, start_time, end_time);
             }
           }
-          
+        await update_coordinator_chat_history(sender, replyMessage.message, "sent")
         res.json({ message: replyMessage.message });
     } catch (error) {
         console.error('Error generating response:', error);

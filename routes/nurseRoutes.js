@@ -46,7 +46,7 @@ router.post('/chat_nurse', async (req, res) => {
           `, [sender]);
           
           const pastMessages = result.rows.map(row => row.message);
-
+        console.log("past messages", pastMessages);
         let replyMessage = await generateReplyFromAINurse(text,pastMessages);
         console.log("Raw reply generated:", replyMessage);
 
