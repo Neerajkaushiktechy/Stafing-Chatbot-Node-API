@@ -119,7 +119,7 @@ finally the response should be generated like this
   }
 }
 
-async function generateReplyFromAINurse(text, chats) {
+async function generateReplyFromAINurse(text, pastMessages) {
   try {
     console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
@@ -139,7 +139,8 @@ async function generateReplyFromAINurse(text, chats) {
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
       once you get the full information (make sure you have the full information), just say okay let me check or something like that. Do not ask for confirmation like "is this information correct".
-      Message from sender: "${text}"`,
+      Message from sender: "${text}". You will also be given the past message history for a nurse make use of past messages if you can to make the messages more friendly. 
+      Past Messages: ${pastMessages}`,
     });
 
     return response.text; // Return the generated reply text from Gemini
@@ -150,27 +151,34 @@ async function generateReplyFromAINurse(text, chats) {
   }
 }
 
-async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time){
+async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages){
   try {
     console.log("AI is generating a message...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) to the staffing coordinator. You can only reply with true or false. return an object consisting a friendly message suitable to send the user and another value called confirmation which should contain true or false. like this 
+      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Are you interesed in covering this shift" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
+      Here are the required details.
+      1. Nurse type: ${nurse_type}
+      2. Shift: ${shift}
+      3. Hospital: ${hospital}
+      4. Location: ${location}
+      5. Date: ${date}\
+      6. Start time: ${start_time}
+      7. end time: ${end_time}
+      8. Past Messages: ${pastMessages}
+      
+      return an object consisting a friendly message suitable to send the user like this 
       {
         "message": "Friendly text you want to send to user.",
-        confirmation: true or false
-      
       }
         Always reply in this JSON format:
       {
         "message": "Friendly text you want to send to user.",
-        confirmation: true or false
       }
 
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
-      once you get the full information (make sure you have the full information), just say okay let me check or something like that. Do not ask for confirmation like "is this information correct".
-      Message from sender: "${text}"`,
+      `,
     });
 
     return response.text; // Return the generated reply text from Gemini

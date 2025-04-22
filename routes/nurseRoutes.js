@@ -13,8 +13,8 @@ router.post('/chat_nurse', async (req, res) => {
     try {
         await pool.query(
             `
-            INSERT INTO nurse_chat_history 
-            (messages, phone_number, message_type)
+            INSERT INTO nurse_chat_data 
+            (message, mobile_number, message_type)
             VALUES ($1, $2, $3)
             `,
             [text,sender,'received']
@@ -39,7 +39,15 @@ router.post('/chat_nurse', async (req, res) => {
 
         console.log("Found shift_id:", shift_id);
 
-        let replyMessage = await generateReplyFromAINurse(text);
+        const result = await pool.query(`
+            SELECT message
+            FROM nurse_chat_data
+            WHERE mobile_number = $1
+          `, [sender]);
+          
+          const pastMessages = result.rows.map(row => row.message);
+
+        let replyMessage = await generateReplyFromAINurse(text,pastMessages);
         console.log("Raw reply generated:", replyMessage);
 
         // Check if replyMessage is a string and starts with ```json
