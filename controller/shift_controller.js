@@ -90,7 +90,8 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
             console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
           }
         
-       try {
+       if (nurse_id){
+        try {
           const {rows} = await pool.query(
             `SELECT mobile_number
             FROM nurses
@@ -108,6 +109,7 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
         catch (error) {
             console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
           }
+       }
      
   } catch (error) {
     console.error('Error deleting shift:', error);
