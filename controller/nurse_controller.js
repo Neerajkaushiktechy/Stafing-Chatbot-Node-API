@@ -24,13 +24,7 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
     const phoneNumber = nurse.mobile_number;
     const nurse_availability = await check_nurse_availability(nurse.id, shift_id);
     if (nurse_availability) {
-      const result = await pool.query(`
-        SELECT message
-        FROM nurse_chat_data
-        WHERE mobile_number = $1
-      `, [phoneNumber]);
-      
-      const pastMessages = result.rows.map(row => row.message);
+      const pastMessages = await get_nurse_chat_data(phoneNumber)
       let message = await generateMessageForNurseAI(nurse_type, shift, hospital_name, location, date, start_time, end_time,pastMessages)
       if (typeof message === 'string') {
         message = message.trim();
@@ -56,14 +50,7 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
         (sender, receiver, message, shift_id)
         VALUES ($1, $2, $3, $4)
       `, [sender, phoneNumber, AiMessage, shift_id]); 
-      await pool.query(
-        `
-        INSERT INTO nurse_chat_data 
-        (message, mobile_number, message_type)
-        VALUES ($1, $2, $3)
-        `,
-        [AiMessage,phoneNumber,'sent']
-      );
+      await update_nurse_chat_history(phoneNumber, AiMessage, 'sent')
       try {
         const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
           recipient: phoneNumber,
@@ -131,8 +118,37 @@ async function check_nurse_availability(nurse_id, shift_id) {
   }
 }
 
+async function update_nurse_chat_history(sender, text, type) {
+  try {
+    await pool.query(`
+      INSERT INTO nurse_chat_data
+      (mobile_number, message, message_type)
+      VALUES ($1, $2, $3)
+    `, [sender, text, type]);
+    console.log('Message successfully inserted for coordinator.');
+  } catch (err) {
+    console.error('Error updating coordinator chat history:', err);
+  }
+}
+
+async function get_nurse_chat_data(sender){
+  try {
+      const result = await pool.query(`
+          SELECT message from nurse_chat_data
+          WHERE mobile_number = $1
+          `,[sender])
+      console.log("Coordinator chat history")
+      const pastMessages = result.rows.map(row => row.message);
+      return pastMessages
+  } catch (error) {
+      console.error("Error getting coordinator chat data", error)
+  }
+}
 
 module.exports = {
     search_nurses,
-    send_nurses_message
+    send_nurses_message,
+    update_nurse_chat_history,
+    get_nurse_chat_data
+
 }

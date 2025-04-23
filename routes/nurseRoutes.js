@@ -5,20 +5,14 @@ const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
 const { check_shift_status } = require('../controller/shift_controller.js');
 const axios = require('axios');
+const { update_nurse_chat_history, get_nurse_chat_data } = require('../controller/nurse_controller.js');
 require('dotenv').config();
 router.post('/chat_nurse', async (req, res) => {
     const { sender, text } = req.body; 
 
     console.log('Received:', sender, text);
     try {
-        await pool.query(
-            `
-            INSERT INTO nurse_chat_data 
-            (message, mobile_number, message_type)
-            VALUES ($1, $2, $3)
-            `,
-            [text,sender,'received']
-          );
+        await update_nurse_chat_history(sender,text, "received")
     } catch (error) {
         console.error('Error updating chat history:', error);
     }
@@ -38,14 +32,8 @@ router.post('/chat_nurse', async (req, res) => {
         const shift_id = rows.length > 0 ? rows[0].shift_id : null;
 
         console.log("Found shift_id:", shift_id);
-
-        const result = await pool.query(`
-            SELECT message
-            FROM nurse_chat_data
-            WHERE mobile_number = $1
-          `, [sender]);
           
-          const pastMessages = result.rows.map(row => row.message);
+        const pastMessages = await get_nurse_chat_data(sender)
         console.log("past messages", pastMessages);
         let replyMessage = await generateReplyFromAINurse(text,pastMessages);
         console.log("Raw reply generated:", replyMessage);
@@ -68,6 +56,8 @@ router.post('/chat_nurse', async (req, res) => {
                 return res.status(500).json({ message: "Invalid AI response format." });
             }
         }
+        await update_nurse_chat_history(sender,replyMessage.message, "sent")
+        res.json({ message: replyMessage.message});
         if (replyMessage.confirmation==true) {
             const status = await check_shift_status(shift_id)
             if (status == 'filled'){
@@ -86,7 +76,7 @@ router.post('/chat_nurse', async (req, res) => {
                 await update_coordinator(shift_id, sender)
             }
         }
-        res.json({ message: replyMessage.message});
+        
     } catch (error) {
         console.error('Error generating response:', error);
         res.status(500).json({ message: "Sorry, something went wrong." });
