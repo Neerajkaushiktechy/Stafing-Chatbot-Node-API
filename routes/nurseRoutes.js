@@ -3,7 +3,7 @@ const pool = require('../db');
 const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
-const { check_shift_status } = require('../controller/shift_controller.js');
+const { check_shift_status, search_shift, shift_cancellation_nurse} = require('../controller/shift_controller.js');
 const axios = require('axios');
 const { update_nurse_chat_history, get_nurse_chat_data } = require('../controller/nurse_controller.js');
 require('dotenv').config();
@@ -74,6 +74,14 @@ router.post('/chat_nurse', async (req, res) => {
             }
             else{
                 await update_coordinator(shift_id, sender)
+            }
+        }
+        if (replyMessage.shift_details && replyMessage.cancellation){
+            const shiftDetailsArray = Array.isArray(replyMessage.shift_details) ? replyMessage.shift_details : [replyMessage.shift_details];
+            console.log("shift details", replyMessage.shift_details)
+            for (const shiftDetail of shiftDetailsArray) {
+              const { nurse_type, shift, location, hospital_name, date, start_time, end_time } = shiftDetail;
+              await shift_cancellation_nurse(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender)
             }
         }
         
