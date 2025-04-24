@@ -6,6 +6,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function generateReplyFromAI(text, pastMessages) {
   try {
+    console.log("PAST MESSAGE", pastMessages)
     console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -35,6 +36,7 @@ async function generateReplyFromAI(text, pastMessages) {
       - If the user has not provided full nurse details yet, set "nurse_details" as null. And Keep asking them for the full information
       - If the user has provided details for multiple nurses, fill them in "nurse_details" as an array of objects.
       - once the user has provided details, fill them in "nurse_details".
+      - note that you should only store the hospital name in the object so if the user has provided hospital name as "St. Stephens Hospital", store is as St. Stephens.
       for example:-
         User: Hi
         Bot: Hello there how may I help you today
@@ -152,6 +154,103 @@ async function generateReplyFromAI(text, pastMessages) {
       "end_time": "12:00:00"
     }
       make use of 24 hour clock to differ between AM and PM
+      only reply with an json object in the above format.
+      the message should look like it was sent by a human.
+      once you get the full information (make sure you have the full information), just say okay let me check or something like that. Do not ask for confirmation like "is this information correct"
+
+    You can also be used for shift cancellation as well. Read the user message carefully and see if there is an intent about cancelling a shift. Once you see an intent for shift cancellation ask the user about the details of the shift which they need cancelled. Like the hospital name where the shift was required, the location, the nurse type, the type of shift, the date and the start and end time of the shift Convert the date into a valid date format for PostgreSQL database and do the same for time as well. Once the user has provided details for shift cancellation generate a response in this manner.
+      {
+      message: A friendly message for the user
+      shift_details:{
+        hospital_name: (name of hospital),
+        location: (location),
+        nurse_type: (tpye of nurse),
+        shift: (AM or PM whichever provided),
+        date: (Date of shift suitable for postgreSQL PGadmin)
+        start_time: (start time of shift suitable for postgreSQL PGadmin),
+        end_time: (end time of shift suitable for postgreSQL PGadmin)
+
+      }
+        cancellation: Either true or false
+      }
+    Keep the shift details as null until you are given the whole shift details.
+    For example:-
+      User: I would like to cancel a shift.
+      Bot: {
+        message: sure, please tell me which shift you need to cancel.
+        shift_details: null
+        cancellation: True
+      }
+      User: I requested a shift for an RN nurse in Delhi
+      Bot:{
+        message: If you need help in cancelling a shift you booked for an RN nurse in Delhi kindly provide me with the full shift details.
+        shift_details: null
+        cancellation: True (since the past messages suggest that the user meant to cancel this shift
+      }
+      User: I would like to cancel a shift requested for an RN nurse at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      Bot: {
+        message: Okay please wait while I work on it
+        shift_details: {
+        hospital_name: Fortis,
+        location: Delhi,
+        nurse_type: RN,
+        shift: AM,
+        date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
+        start_time: "00:00:00", (convert time into a suitable format)
+        end_time: "08:00:00" (convert time into a suitable format)
+        }
+        cancelaation: True
+      }
+
+      You can also make use of past message history to make the process simpler.
+      For example:-
+      User: I would like to cancel my last requested shift
+      Bot: {
+      message: Sure please wait while I work on it
+      shift_details: {
+        check past messages and fill the details with the latest requested shift
+      },
+      cancellation: True
+      }
+
+      Make sure to not ask the user about the same details again insead take them from past messages and only ask the details user forgot to provide.
+
+      For example:-
+      User: I would like to cancel a shift I requested for an RN nurse in Delhi.
+      Bot: {
+      message: Sure kindly provide me with the remaining details of the shift.
+      Shift_details: null
+      cancellation: True
+      }
+      User: It was requested at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      Bot:{
+      message: Okay I am working on it,
+      shift_details: {
+      hospital_name: Fortis,
+        location: Delhi,
+        nurse_type: RN,
+        shift: AM,
+        date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
+        start_time: "00:00:00", (convert time into a suitable format)
+        end_time: "08:00:00" (convert time into a suitable format)
+      },
+      cancellation: True
+      }
+      If the user has provided details for multiple shift cancellation, fill them in "shift_details" as an array of objects.
+      only reply with an json object in the above format.
+      the message should look like it was sent by a human.
+      once the shift has been cancelled the conversations after that to the user shall be carried out in a normal booking style as mentioned earlier. 
+      If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
+      User: I want to cancel my shift
+      Bot: [Cancels shift]
+
+      User: Hi
+      Bot: {
+        message: "Hi there! How can I assist you today?",
+        nurse_details: null
+      }
+      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as      continuation of prior intent.
+      Make full use of past message history to make the messages sound reasonable and understandable
       Message from sender: "${text}"
       Past Message history: ${pastMessages}`,
     });
@@ -183,7 +282,93 @@ async function generateReplyFromAINurse(text, pastMessages) {
 
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
-      once you get the full information (make sure you have the full information), just say okay let me check or something like that. Do not ask for confirmation like "is this information correct".
+
+      *** You can also be used by a nurse to cancel a shift he/she confirmed earlier. Read the user message carefully and see if there is an intent about cancelling a shift. Once you see an intent for shift cancellation ask the user about the details of the shift which they need cancelled. Like the hospital name where the shift was required, the location, the nurse type, the type of shift, the date and the start and end time of the shift Convert the date into a valid date format for PostgreSQL database and do the same for time as well. Once the user has provided details for shift cancellation generate a response in this manner.
+       {
+      message: A friendly message for the user
+      shift_details:{
+        hospital_name: (name of hospital),
+        location: (location),
+        nurse_type: (tpye of nurse),
+        shift: (AM or PM whichever provided),
+        date: (Date of shift suitable for postgreSQL PGadmin)
+        start_time: (start time of shift suitable for postgreSQL PGadmin),
+        end_time: (end time of shift suitable for postgreSQL PGadmin)
+
+      }
+        cancellation: Either true or false
+      }
+    Keep the shift details as null until you are given the whole shift details.
+
+    Nurse: I would like to cancel a shift.
+      Bot: {
+        message: sure, please tell me which shift you need to cancel.
+        shift_details: null
+        cancellation: True
+      }
+      Nurse: I confirmed a shift for an RN nurse in Delhi
+      Bot:{
+        message: If you need help in cancelling a shift you confirmed for an RN nurse in Delhi kindly provide me with the full shift details.
+        shift_details: null
+        cancellation: True (since the past messages suggest that the user meant to cancel this shift
+      }
+      Nurse: I would like to cancel a shift confirmed for an RN nurse at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      Bot: {
+        message: Okay please wait while I work on it
+        shift_details: {
+        hospital_name: Fortis,
+        location: Delhi,
+        nurse_type: RN,
+        shift: AM,
+        date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
+        start_time: "00:00:00", (convert time into a suitable format)
+        end_time: "08:00:00" (convert time into a suitable format)
+        }
+        cancelaation: True
+      }
+
+      You can also make use of past message history to make the process simpler.
+      For example:-
+      Nurse: I would like to cancel my last confirmed shift
+      Bot: {
+      message: Sure please wait while I work on it
+      shift_details: {
+        check past messages and fill the details with the latest requested shift
+      },
+      cancellation: True
+      }
+
+      Make sure to not ask the user about the same details again insead take them from past messages and only ask the details user forgot to provide.
+
+      For example:-
+      Nurse: I would like to cancel a shift I confirmed for an RN nurse in Delhi.
+      Bot: {
+      message: Sure kindly provide me with the remaining details of the shift.
+      Shift_details: null
+      cancellation: True
+      }
+      User: It was confirmed at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      Bot:{
+      message: Okay I am working on it,
+      shift_details: {
+      hospital_name: Fortis,
+        location: Delhi,
+        nurse_type: RN,
+        shift: AM,
+        date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
+        start_time: "00:00:00", (convert time into a suitable format)
+        end_time: "08:00:00" (convert time into a suitable format)
+      },
+      cancellation: True
+      }
+      If the user has provided details for multiple shift cancellation, fill them in "shift_details" as an array of objects.
+      only reply with an json object in the above format.
+      the message should look like it was sent by a human.
+      once the shift has been cancelled the conversations after that to the nurse shall be carried out in a normal shift confirmation style as mentioned earlier.
+      - **Only act on shift cancellation** if the user's current message clearly expresses an intent to cancel (e.g., "I want to cancel", "please cancel my shift", "need to remove my booking", etc.).
+      - **Past messages may be used for context**, but only if the current message shows continuation (e.g., providing details for a      cancellation already in progress).
+      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as      continuation of prior intent.
+
       Message from sender: "${text}". You will also be given the past message history for a nurse make use of past messages if you can to make the messages more friendly. 
       Past Messages: ${pastMessages}`,
     });
