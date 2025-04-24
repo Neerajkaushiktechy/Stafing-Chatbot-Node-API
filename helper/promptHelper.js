@@ -274,11 +274,7 @@ Bot: {
       cancellation: true
       }
 
-      When the user first provides shift_details for cancellation reply in this format 
-      {message: friendly message to user,
-      shift_details: shift details,
-      cencellation: true
-      }
+      
        If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
       - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as continuation of prior intent.
       Make full use of past message history to make the messages sound reasonable and understandable
@@ -299,18 +295,21 @@ async function generateReplyFromAINurse(text, pastMessages) {
     console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) to the staffing coordinator. You can only reply with true or false. return an object consisting a friendly message suitable to send the user and another value called confirmation which should contain true or false. like this 
+      contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) and a shift ID of the shift which the nurse wants to cover (the shift ID will be given to you by the nurse if you check the previous message). return an object consisting a friendly message suitable to send the user, another value called confirmation which should contain true or false and another called shift_id which has the id of the shift. like this 
       {
         "message": "Friendly text you want to send to user.",
-        confirmation: true or false
+        confirmation: true or false,
+        shift_id: shift ID
       
       }
         Always reply in this JSON format:
       {
         "message": "Friendly text you want to send to user.",
         confirmation: true or false
+        shift_id: shift ID
       }
 
+      If the nurse has not provided the shift ID ask them to provide the shift ID once again by using a friendly message.
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
 
@@ -412,12 +411,12 @@ async function generateReplyFromAINurse(text, pastMessages) {
   }
 }
 
-async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages){
+async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages, shift_id){
   try {
     console.log("AI is generating a message...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Are you interesed in covering this shift" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
+      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Shift ID: (shift_id). Kindly tell me the ID of this shify you are interesed in covering" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
       Here are the required details.
       1. Nurse type: ${nurse_type}
       2. Shift: ${shift}
@@ -427,6 +426,7 @@ async function generateMessageForNurseAI(nurse_type, shift, hospital, location, 
       6. Start time: ${start_time}
       7. end time: ${end_time}
       8. Past Messages: ${pastMessages}
+      9. Shift ID: ${shift_id}
       
       return an object consisting a friendly message suitable to send the user like this 
       {
@@ -437,6 +437,14 @@ async function generateMessageForNurseAI(nurse_type, shift, hospital, location, 
         "message": "Friendly text you want to send to user.",
       }
 
+      For example you need to generate a message like this:-
+
+      Hello! an LVN is needed for a PM shift at Fortis Hospital in Delhi on 2025-05-02 from 2:00 PM to 10:00 PM. Shift ID is 97. Kindly reply with the shift id if you are interested in covering this.
+      
+      Make absolutely sure that you ask the nurse to verify which shift ID she is giving confirmation for ask the nurse to reply including the the shift ID if shift ID is not provided by the nurse ask her to provide the shift ID since booking cant be done without it.
+
+      The shift ID should be returned in the form of an array if the nurse provides more than one shift ID store them like [shiftID1, shiftID2] if only single ID is provided store it as [shiftID1]
+      If the nurse replies with a number consider it to be shift id.
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
       `,

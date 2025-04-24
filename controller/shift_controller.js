@@ -1,6 +1,6 @@
 const pool = require('../db.js');
 const axios = require('axios');
-const { search_nurses, send_nurses_message } = require('./nurse_controller.js');
+const { search_nurses, send_nurses_message, check_nurse_availability } = require('./nurse_controller.js');
 const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 
 async function create_shift(created_by,nurse_type, shift, location, hospital_name,date, start_time, end_time, nurse_id=null, status="open")
@@ -21,7 +21,7 @@ async function create_shift(created_by,nurse_type, shift, location, hospital_nam
       }
 }
 
-async function check_shift_status(shift_id) {
+async function check_shift_status(shift_id, phoneNumber) {
   const { rows } = await pool.query(
     `SELECT status
      FROM shift_tracker
@@ -32,7 +32,16 @@ async function check_shift_status(shift_id) {
   if (rows.length > 0) {
     return rows[0].status;
   } else {
-    return null; // or throw an error if shift_id not found
+    try {
+      const message = "The shift ID you provided does not match any of the shifts. Make sure you have provided the correct ID"
+      await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+        recipient: phoneNumber,
+        message: message,
+      });
+      console.log(`Multiple shift options sent to ${created_by}`);
+    } catch (error) {
+      console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
+    }
   }
 }
 
@@ -302,11 +311,63 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
   }
 }
 
+async function check_shift_validity(shift_id, nursePhoneNumber) {
+  console.log(`Checking validity of nurse ${nursePhoneNumber} for shift ${shift_id}`)
+  const shiftQuery = await pool.query(`
+    SELECT shift, location, nurse_type
+    FROM shift_tracker
+    WHERE id = $1
+  `, [shift_id]);
+
+  if (shiftQuery.rows.length === 0) return false;
+
+  const { shift, location, nurse_type: type } = shiftQuery.rows[0];
+
+  const nurseQuery = await pool.query(`
+    SELECT id, shift, location, nurse_type
+    FROM nurses
+    WHERE mobile_number = $1
+  `, [nursePhoneNumber]);
+
+  if (nurseQuery.rows.length === 0) return false;
+
+  const {
+    id: nurseId,
+    shift: nurseShift,
+    location: nurseLocation,
+    nurse_type: nurseType,
+  } = nurseQuery.rows[0];
+
+  if (shift !== nurseShift || location !== nurseLocation || type !== nurseType) {
+    console.log("DETAILS DID NOT MATCH")
+    const message = `The shift with ID ${shift_id} does not match your details. Please resend the message with a shift ID of a shift offered to you.`;
+    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+      recipient: nursePhoneNumber,
+      message,
+    });
+    return false;
+  }
+
+  const availability = await check_nurse_availability(nurseId, shift_id);
+
+  if (!availability) {
+    const message = `The shift with ID ${shift_id} conflicts with your other shift and thus cannot be completed by you.`;
+    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+      recipient: nursePhoneNumber,
+      message,
+    });
+    return false;
+  }
+
+  return true;
+}
+
 module.exports = {
     create_shift,
     check_shift_status,
     search_shift,
     shift_cancellation_nurse,
     search_shift_by_id,
-    delete_shift
+    delete_shift,
+    check_shift_validity
 }

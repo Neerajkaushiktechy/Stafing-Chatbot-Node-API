@@ -25,7 +25,7 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
     const nurse_availability = await check_nurse_availability(nurse.id, shift_id);
     if (nurse_availability) {
       const pastMessages = await get_nurse_chat_data(phoneNumber)
-      let message = await generateMessageForNurseAI(nurse_type, shift, hospital_name, location, date, start_time, end_time,pastMessages)
+      let message = await generateMessageForNurseAI(nurse_type, shift, hospital_name, location, date, start_time, end_time,pastMessages,shift_id)
       if (typeof message === 'string') {
         message = message.trim();
         if (message.startsWith('```json')) {
@@ -45,11 +45,6 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
     }
       const AiMessage = message.message
       console.log("Message from AI for nurse",AiMessage)
-      await pool.query(`
-        INSERT INTO chat_history 
-        (sender, receiver, message, shift_id)
-        VALUES ($1, $2, $3, $4)
-      `, [sender, phoneNumber, AiMessage, shift_id]); 
       await update_nurse_chat_history(phoneNumber, AiMessage, 'sent')
       try {
         const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
@@ -66,6 +61,7 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
 
 async function check_nurse_availability(nurse_id, shift_id) {
   try {
+    console.log("Checking availability")
     // Get the date and time range of the new shift
     const { rows: [newShift] } = await pool.query(`
       SELECT date, start_time, end_time 
@@ -106,6 +102,7 @@ async function check_nurse_availability(nurse_id, shift_id) {
           assignedStart < newEnd &&
           newStart < assignedEnd
         ) {
+          console.log("shift conflicts")
           return false; // Conflict found
         }
       }
@@ -149,6 +146,7 @@ module.exports = {
     search_nurses,
     send_nurses_message,
     update_nurse_chat_history,
-    get_nurse_chat_data
+    get_nurse_chat_data,
+    check_nurse_availability
 
 }
