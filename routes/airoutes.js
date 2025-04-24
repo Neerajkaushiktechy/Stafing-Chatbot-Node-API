@@ -2,7 +2,7 @@ const express = require('express');
 const { generateReplyFromAI } = require('../helper/promptHelper.js');
 const router = express.Router();
 const { search_nurses, send_nurses_message } = require('../controller/nurse_controller.js');
-const { create_shift, search_shift } = require('../controller/shift_controller.js');
+const { create_shift, search_shift, search_shift_by_id} = require('../controller/shift_controller.js');
 const { update_coordinator_chat_history, get_coordinator_chat_data } = require('../controller/coordinator_controller.js');
 router.post('/chat', async (req, res) => {
     const { sender, text } = req.body; 
@@ -61,6 +61,22 @@ router.post('/chat', async (req, res) => {
                 await search_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender)
             }
         }
+
+        if (replyMessage.shift_id && replyMessage.cancellation){
+            const shiftIDArray = Array.isArray(replyMessage.shift_id) ? replyMessage.shift_id : [replyMessage.shift_id];
+            console.log("shift ID", replyMessage.shift_id)
+            for (const shiftID of shiftIDArray) {
+              await search_shift_by_id(shiftID,sender)    
+            }
+        }
+        // if (replyMessage.ambiguous_shifts && replyMessage.cancellation && replyMessage.shift_details){
+        //     const shiftDetailsArray = Array.isArray(replyMessage.ambiguous_shifts) ? replyMessage.ambiguous_shifts : [replyMessage.ambiguous_shifts];
+        //     console.log("shift details", replyMessage.ambiguous_shifts)
+        //     for (const shiftDetail of shiftDetailsArray) {
+        //       const { nurse_type, shift, location, hospital_name, date, start_time, end_time, nurse_name } = shiftDetail;
+        //         await match_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender, nurse_name)
+        //     }
+        // }
         await update_coordinator_chat_history(sender, replyMessage.message, "sent")
         
     } catch (error) {

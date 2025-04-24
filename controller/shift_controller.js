@@ -1,6 +1,7 @@
 const pool = require('../db.js');
 const axios = require('axios');
 const { search_nurses, send_nurses_message } = require('./nurse_controller.js');
+const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 
 async function create_shift(created_by,nurse_type, shift, location, hospital_name,date, start_time, end_time, nurse_id=null, status="open")
 {
@@ -48,18 +49,60 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
       AND created_by = $8
   `, [nurse_type, shift, location, hospital_name, date, start_time, end_time, created_by]);
 
-  if (rows.length > 0) {
-    const shift_id = rows[0].id;
-    const nurse_id = rows[0].nurse_id;
-    const nurse_type = rows[0].nurse_type;
-    const shift_value = rows[0].shift;
-    const hospital_name = rows[0].hospital_name;
-    const location = rows[0].location;
-    const date = rows[0].date;
-    const start_time = rows[0].start_time;
-    const end_time = rows[0].end_time;
-    console.log("shift found with id", shift_id)
-    await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time);
+  if (rows.length > 0 ) {
+      if (rows.length === 1){
+        const shift_id = rows[0].id;
+        const nurse_id = rows[0].nurse_id;
+        const nurse_type = rows[0].nurse_type;
+        const shift_value = rows[0].shift;
+        const hospital_name = rows[0].hospital_name;
+        const location = rows[0].location;
+        const date = rows[0].date;
+        const start_time = rows[0].start_time;
+        const end_time = rows[0].end_time;
+        console.log("shift found with id", shift_id)
+        await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time);
+      }
+      else if (rows.length > 1) {
+        for (let i=0; i< rows.length; i++){
+          console.log("FOUND THIS ", rows[i])
+        }
+        let message = `We found multiple shifts matching your request:\n\n`;
+      
+        for (let i = 0; i < rows.length; i++) {
+          const shift = rows[i];
+      
+          let nurse_name = "Not assigned";
+          if (shift.nurse_id) {
+            try {
+              const result = await pool.query(
+                `SELECT name FROM nurses WHERE id = $1`,
+                [shift.nurse_id]
+              );
+              if (result.rows.length > 0) {
+                nurse_name = result.rows[0].name;
+              }
+            } catch (err) {
+              console.error(`Error fetching nurse name for id ${shift.nurse_id}:`, err.message);
+            }
+          }
+      
+          message += `${i + 1}. ${shift.nurse_type} nurse (${nurse_name}) at ${shift.hospital_name}, ${shift.location} on ${shift.date} from ${shift.start_time} to ${shift.end_time}\n ID:${shift.id}\n`;
+        }
+      
+        message += `\nPlease reply with the number of the shift you'd like to cancel.`;
+        // await update_coordinator_chat_history(created_by, message, 'sent')
+        try {
+          await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+            recipient: created_by,
+            message: message,
+          });
+          console.log(`Multiple shift options sent to ${created_by}`);
+        } catch (error) {
+          console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
+        }
+      }
+      
   } else {
     try {
       console.log("shift not found")
@@ -114,6 +157,54 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
   } catch (error) {
     console.error('Error deleting shift:', error);
   }
+}
+
+// async function match_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender, nurse_name) {
+//   try {
+//     const { rows } = await pool.query(`
+//       SELECT nurse_id FROM shift_tracker
+//       WHERE nurse_type ILIKE $1
+//         AND shift ILIKE $2
+//         AND location ILIKE $3
+//         AND hospital_name ILIKE $4
+//         AND date = $5
+//         AND start_time = $6
+//         AND end_time = $7
+//     `, [nurse_type, shift, location, hospital_name, date, start_time, end_time]);
+  
+//     for (const row of rows) {
+//       const nurseId = row.nurse_id;
+//       const nurseResult = await pool.query(`SELECT name, mobile_number FROM nurses WHERE id = $1`, [nurseId]);
+  
+//       if (nurseResult.rows.length > 0) {
+//         const name = nurseResult.rows[0].name;
+//         if (name.toLowerCase() === nurse_name.toLowerCase()) {
+//           console.log(`Match found: ${name}`)
+//           await delete_shift(row.id,sender,nurseId,nurse_type,shift,hospital_name,location,date,start_time,end_time)
+//         }
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error matching shift:", error);
+//   }
+  
+// }
+
+async function search_shift_by_id(shift_id, created_by){
+  const {rows} = await pool.query(`
+    SELECT * FROM shift_tracker
+    WHERE id = $1
+    `,[shift_id])
+
+    const nurse_id = rows[0].nurse_id;
+    const nurse_type = rows[0].nurse_type;
+    const shift_value = rows[0].shift;
+    const hospital_name = rows[0].hospital_name;
+    const location = rows[0].location;
+    const date = rows[0].date;
+    const start_time = rows[0].start_time;
+    const end_time = rows[0].end_time;
+    await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time);
 }
 async function shift_cancellation_nurse(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender) {
   try {
@@ -215,5 +306,7 @@ module.exports = {
     create_shift,
     check_shift_status,
     search_shift,
-    shift_cancellation_nurse
+    shift_cancellation_nurse,
+    search_shift_by_id,
+    delete_shift
 }

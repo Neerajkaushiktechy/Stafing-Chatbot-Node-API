@@ -239,17 +239,48 @@ async function generateReplyFromAI(text, pastMessages) {
       If the user has provided details for multiple shift cancellation, fill them in "shift_details" as an array of objects.
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
-      once the shift has been cancelled the conversations after that to the user shall be carried out in a normal booking style as mentioned earlier. 
-      If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
-      User: I want to cancel my shift
-      Bot: [Cancels shift]
 
-      User: Hi
-      Bot: {
-        message: "Hi there! How can I assist you today?",
-        nurse_details: null
+      The user can also have multiple shifts requested for the same time, same date, same hospital and same location. In that case we are sending user a message telling him/her about all the shifts found and ask him to tell us which shift would he like to delete. Look at the past messages and realize if the user was asked about which nurse he wants to delete or not
+      for example:-
+      If multiple shifts match the user's cancellation request, you show them and wait for user confirmation Once the user specifies the shift, you respond like this:
+
+Example:
+User: I want to cancel shift number 1 and 3
+Bot: {
+  "message": "Sure I will help you cancel shifts confirmed by Asha Sharma and Sunita Verma.",
+  shift_id:[1],
+  "cancellation": true
+}
+
+-  If user cancels just one shift, still use the "shift_id" array with one object.
+      once the shift has been cancelled the conversations after that to the user shall be carried out in a normal booking style as mentioned earlier. 
+      
+      ***Example of whole conversation***
+      User: I would like to cancel a shift
+      Bot:{
+      message: Sure, please provide me the shift details you would like to cancel
+      shift_details:null
+      cancellation: true
       }
-      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as      continuation of prior intent.
+      User: I would like to delete a shift requested at Fortis Delhi for an LVN nurse for PM shift on 25 april 2025 from 2PM to 10PM
+      ***We search the database to check if there are multiple shifts requested by the sender for the same location date and time if there are multiple shifts we ask user to tell us the ID of the shift he needs deleted***
+     
+      User: cancel shift with ID 1
+      or
+      User: 1
+      Bot{
+      message: okay i will delete shift with id 1
+      shift_id: 1
+      cancellation: true
+      }
+
+      When the user first provides shift_details for cancellation reply in this format 
+      {message: friendly message to user,
+      shift_details: shift details,
+      cencellation: true
+      }
+       If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
+      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as continuation of prior intent.
       Make full use of past message history to make the messages sound reasonable and understandable
       Message from sender: "${text}"
       Past Message history: ${pastMessages}`,
