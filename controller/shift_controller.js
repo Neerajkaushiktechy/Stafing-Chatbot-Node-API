@@ -319,7 +319,14 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     WHERE id = $1
   `, [shift_id]);
 
-  if (shiftQuery.rows.length === 0) return false;
+  if (shiftQuery.rows.length === 0) {
+    const message = `The shift with ID ${shift_id} does not exist try putting in a valid shift ID.`;
+    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+      recipient: nursePhoneNumber,
+      message,
+    });
+    return false;
+  }
 
   const { shift, location, nurse_type: type } = shiftQuery.rows[0];
 
@@ -329,14 +336,7 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     WHERE mobile_number = $1
   `, [nursePhoneNumber]);
 
-  if (nurseQuery.rows.length === 0) {
-    const message = `The shift with ID ${shift_id} does not exist try putting in a valid shift ID.`;
-    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-      recipient: nursePhoneNumber,
-      message,
-    });
-    return false;
-  }
+  if (nurseQuery.rows.length === 0) return false;
 
   const {
     id: nurseId,
@@ -345,7 +345,11 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     nurse_type: nurseType,
   } = nurseQuery.rows[0];
 
-  if (shift !== nurseShift || location !== nurseLocation || type !== nurseType) {
+  if (
+    shift.toLowerCase() !== nurseShift.toLowerCase() ||
+    location.toLowerCase() !== nurseLocation.toLowerCase() ||
+    type.toLowerCase() !== nurseType.toLowerCase()
+  ) {
     console.log("DETAILS DID NOT MATCH")
     const message = `The shift with ID ${shift_id} does not match your details. Please resend the message with a shift ID of a shift offered to you.`;
     await axios.post(`${process.env.HOST_MAC}/send_message/`, {
