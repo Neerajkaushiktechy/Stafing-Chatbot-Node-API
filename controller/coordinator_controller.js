@@ -120,6 +120,43 @@ async function get_coordinator_chat_data(sender){
         console.error("Error getting coordinator chat data", error)
     }
 }
+
+async function validate_shift_before_cancellation(shift_id, phoneNumber){
+    const shiftDetails = await pool.query(`
+        SELECT created_by
+        FROM shift_tracker
+        where id = $1
+        `,[shift_id])
+    const{created_by} = shiftDetails[0]
+    if (shiftDetails[0].length == 0){
+        try {
+            const message = `The shift with ID ${shift_id} does not exist please check and try again`
+            const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+                recipient: phoneNumber,
+                message: message,
+            });
+            console.log(`Message sent to ${phoneNumber}`);
+            } catch (error) {
+            console.error(`Failed to send message to ${phoneNumber}:`, error.response ? error.response.data : error.message);
+            }
+    }
+    if (created_by != phoneNumber){
+        try {
+        const message = `The shift with ID ${shift_id} does not exist in your database please check and try again`
+        const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+            recipient: phoneNumber,
+            message: message,
+        });
+        console.log(`Message sent to ${phoneNumber}`);
+        } catch (error) {
+        console.error(`Failed to send message to ${phoneNumber}:`, error.response ? error.response.data : error.message);
+        }
+    return false
+    }
+    else if(created_by == phoneNumber){
+        return true
+    }
+}
 module.exports = {
-    update_coordinator, update_coordinator_chat_history, get_coordinator_chat_data
+    update_coordinator, update_coordinator_chat_history, get_coordinator_chat_data, validate_shift_before_cancellation
 };
