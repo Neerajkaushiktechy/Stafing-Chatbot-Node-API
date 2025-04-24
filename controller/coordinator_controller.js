@@ -139,6 +139,7 @@ async function validate_shift_before_cancellation(shift_id, phoneNumber){
             } catch (error) {
             console.error(`Failed to send message to ${phoneNumber}:`, error.response ? error.response.data : error.message);
             }
+        return false
     }
     if (created_by != phoneNumber){
         try {

@@ -62,17 +62,22 @@ router.post('/chat', async (req, res) => {
             }
         }
 
-        if (replyMessage.shift_id && replyMessage.cancellation){
-            const shiftIDArray = Array.isArray(replyMessage.shift_id) ? replyMessage.shift_id : [replyMessage.shift_id];
-            console.log("shift ID", replyMessage.shift_id)
+        if (replyMessage.shift_id && replyMessage.cancellation) {
+            const shiftIDArray = Array.isArray(replyMessage.shift_id)
+              ? replyMessage.shift_id
+              : [replyMessage.shift_id];
+          
+            console.log("Shift IDs:", shiftIDArray);
+          
             for (const shiftID of shiftIDArray) {
-              const shiftValidity = await validate_shift_before_cancellation(shiftID, sender)
-              if (shiftValidity){
-                await search_shift_by_id(shiftID,sender)  
-              }
-                
+              const isValid = await validate_shift_before_cancellation(shiftID, sender);
+          
+              if (!isValid) continue;
+          
+              await search_shift_by_id(shiftID, sender);
             }
-        }
+          }
+          
         // if (replyMessage.ambiguous_shifts && replyMessage.cancellation && replyMessage.shift_details){
         //     const shiftDetailsArray = Array.isArray(replyMessage.ambiguous_shifts) ? replyMessage.ambiguous_shifts : [replyMessage.ambiguous_shifts];
         //     console.log("shift details", replyMessage.ambiguous_shifts)
