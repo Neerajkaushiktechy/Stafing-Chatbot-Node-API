@@ -329,7 +329,14 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     WHERE mobile_number = $1
   `, [nursePhoneNumber]);
 
-  if (nurseQuery.rows.length === 0) return false;
+  if (nurseQuery.rows.length === 0) {
+    const message = `The shift with ID ${shift_id} does not exist try putting in a valid shift ID.`;
+    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+      recipient: nursePhoneNumber,
+      message,
+    });
+    return false;
+  }
 
   const {
     id: nurseId,

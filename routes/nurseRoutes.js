@@ -46,25 +46,28 @@ router.post('/chat_nurse', async (req, res) => {
         if (replyMessage.confirmation==true && replyMessage.shift_id) {
             const shift_id = replyMessage.shift_id
             const shiftIDArray = Array.isArray(replyMessage.shift_id) ? replyMessage.shift_id : [replyMessage.shift_id];
-            for (const shiftID of shiftIDArray){
-                const status = await check_shift_status(shiftID, sender)
-                const valid_shift = await check_shift_validity(shiftID, sender)
-            }
-            if (status == 'filled'){
-                try {
-                    const message = 'Sorry the shift has already been filled, we will update you when more shifts are available for you'
-                      const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-                        recipient: sender,
-                        message: message,
-                      });
-                      console.log(`Message sent to ${sender}`);
-                    } catch (error) {
-                      console.error(`Failed to send message to ${sender}:`, error.response ? error.response.data : error.message);
-                    } 
-            }
-            else if(valid_shift){
-                await update_coordinator(shift_id, sender)
-            }
+            for (const shiftID of shiftIDArray) {
+                const valid_shift = await check_shift_validity(shiftID, sender);
+                if (!valid_shift) continue;
+              
+                const status = await check_shift_status(shiftID, sender);
+                if (status === 'filled') {
+                  try {
+                    const message = 'Sorry, the shift has already been filled. We will update you when more shifts are available for you.';
+                    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+                      recipient: sender,
+                      message,
+                    });
+                    console.log(`Message sent to ${sender}`);
+                  } catch (error) {
+                    console.error(`Failed to send message to ${sender}:`, error.response ? error.response.data : error.message);
+                  }
+                  continue;
+                }
+              
+                await update_coordinator(shiftID, sender);
+              }
+              
         }
         if (replyMessage.shift_details && replyMessage.cancellation){
             const shiftDetailsArray = Array.isArray(replyMessage.shift_details) ? replyMessage.shift_details : [replyMessage.shift_details];
