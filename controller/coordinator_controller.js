@@ -1,5 +1,5 @@
 const pool = require('../db.js');
-const axios = require('axios');
+const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
 async function update_coordinator(shift_id, nurse_phoneNumber) {
     const nurse = await get_nurse_info(nurse_phoneNumber);
@@ -13,18 +13,7 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
         const message = `Hello! Your shift requested at ${shiftInfo.hospital_name}, ${shiftInfo.location}, on ${shiftInfo.date} from ${shiftInfo.start_time} to ${shiftInfo.end_time} will be covered by ${nurse.name}. You can reach out via ${nurse.mobile_number}.`;
 
         console.log("Message to send:", message);
-
-        try {
-              const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-                recipient: recipient,
-                message: message,
-              });
-              console.log(`Message sent to ${recipient}`);
-              console.log("message sent to", recipient, "message", message)
-            } catch (error) {
-              console.error(`Failed to send message to ${recipient}:`, error.response ? error.response.data : error.message);
-            } 
-
+        await sendMessage(recipient, message);
     } else {
         console.error("Missing nurse or shift information. Cannot send message.");
     }
@@ -129,32 +118,16 @@ async function validate_shift_before_cancellation(shift_id, phoneNumber) {
     `, [shift_id]);
   
     if (result.rows.length === 0) {
-      try {
-        const message = `The shift with ID ${shift_id} does not exist. Please check and try again.`;
-        await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-          recipient: phoneNumber,
-          message,
-        });
-        console.log(`Message sent to ${phoneNumber}`);
-      } catch (error) {
-        console.error(`Failed to send message to ${phoneNumber}:`, error.response ? error.response.data : error.message);
-      }
+      const message = `The shift with ID ${shift_id} does not exist. Please check and try again.`;
+      await sendMessage(phoneNumber, message);
       return false;
     }
   
     const { created_by } = result.rows[0];
   
     if (created_by !== phoneNumber) {
-      try {
-        const message = `The shift with ID ${shift_id} does not belong to your account. Please check and try again.`;
-        await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-          recipient: phoneNumber,
-          message,
-        });
-        console.log(`Message sent to ${phoneNumber}`);
-      } catch (error) {
-        console.error(`Failed to send message to ${phoneNumber}:`, error.response ? error.response.data : error.message);
-      }
+      const message = `The shift with ID ${shift_id} does not belong to your account. Please check and try again.`;
+      await sendMessage(phoneNumber,message)
       return false;
     }
   

@@ -1,7 +1,7 @@
 const pool = require('../db.js');
-const axios = require('axios');
 const { search_nurses, send_nurses_message, check_nurse_availability } = require('./nurse_controller.js');
 const { update_coordinator_chat_history } = require('./coordinator_controller.js');
+const { sendMessage } = require('../services/sendMessageAPI.js');
 
 async function create_shift(created_by,nurse_type, shift, location, hospital_name,date, start_time, end_time, nurse_id=null, status="open")
 {
@@ -32,16 +32,8 @@ async function check_shift_status(shift_id, phoneNumber) {
   if (rows.length > 0) {
     return rows[0].status;
   } else {
-    try {
-      const message = "The shift ID you provided does not match any of the shifts. Make sure you have provided the correct ID"
-      await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-        recipient: phoneNumber,
-        message: message,
-      });
-      console.log(`Multiple shift options sent to ${created_by}`);
-    } catch (error) {
-      console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
-    }
+    const message = "The shift ID you provided does not match any of the shifts. Make sure you have provided the correct ID"
+    await sendMessage(phoneNumber,message)
   }
 }
 
@@ -100,50 +92,23 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
         }
       
         message += `\nPlease reply with the number of the shift you'd like to cancel.`;
-        // await update_coordinator_chat_history(created_by, message, 'sent')
-        try {
-          await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-            recipient: created_by,
-            message: message,
-          });
-          console.log(`Multiple shift options sent to ${created_by}`);
-        } catch (error) {
-          console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
-        }
+        await update_coordinator_chat_history(created_by, message, 'sent')
+        await sendMessage(created_by, message)
       }
       
   } else {
-    try {
-      console.log("shift not found")
-      const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} does not exist or has been deleted already`
-        const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-          recipient: created_by,
-          message: message,
-        });
-      } 
-    catch (error) {
-        console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
-      }
+    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} does not exist or has been deleted already`
+    await sendMessage(created_by,message)
   }
 }
 
 async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time) {
   try {
     await pool.query(`DELETE FROM shift_tracker WHERE id = $1`, [shift_id]);
-    console.log(`Deleted shift with ID: ${shift_id}`);
-        try {
-          const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift_value} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} has been cancelled succesfully`
-            const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-              recipient: created_by,
-              message: message,
-            });
-          } 
-        catch (error) {
-            console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
-          }
+    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift_value} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} has been cancelled succesfully`
+    await sendMessage(created_by,message)
         
        if (nurse_id){
-        try {
           const {rows} = await pool.query(
             `SELECT mobile_number
             FROM nurses
@@ -152,15 +117,8 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
           )
           const nurse_phoneNumber = rows[0].mobile_number
           const message = `The shift you confirmed at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} has been cancelled by the coordinator. We are sorry for any inconvinience caused`
-            const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-              recipient: nurse_phoneNumber,
-              message: message,
-            });
+          await sendMessage(nurse_phoneNumber,message)
             console.log("nurse informed about cancellation")
-          } 
-        catch (error) {
-            console.error(`Failed to send message:`, error.response ? error.response.data : error.message);
-          }
        }
      
   } catch (error) {
@@ -202,10 +160,7 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
     if (rows.length === 0) {
       // 🔹 Improvement: Early return to avoid nesting
       const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} does not exist or has been deleted already.`;
-      await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-        recipient: sender,
-        message,
-      });
+      await sendMessage(sender, message);
       console.log("Shift not found, user informed.");
       return;
     }
@@ -224,15 +179,7 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
 
     if (fetched_number !== sender) {
       const message = `The shift you are trying to cancel is not assigned to you or does not exist.`;
-      try {
-        await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-          recipient: sender,
-          message,
-        });
-        console.log(`Mismatch: Notification sent to ${sender}`);
-      } catch (error) {
-        console.error(`Failed to notify ${sender}:`, error.response?.data || error.message);
-      }
+      await sendMessage(sender, message);
       return;
     } // 🔹 Early exit if sender is not the assigned nurse
 
@@ -247,15 +194,7 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
 
     // 🔹 Message to nurse
     const messageToNurse = `The shift you confirmed at ${hospital_name}, ${location}, on ${date} from ${start_time} to ${end_time} for ${nurse_type} has been cancelled.`;
-    try {
-      await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-        recipient: sender,
-        message: messageToNurse,
-      });
-      console.log(`Message sent to ${sender}`);
-    } catch (error) {
-      console.error(`Failed to send message to ${sender}:`, error.response?.data || error.message);
-    }
+    await sendMessage(sender, messageToNurse)
 
     // 🔹 Fetch nurses and exclude sender
     let nurses = await search_nurses(nurse_type, shift, location);
@@ -266,15 +205,7 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
 
     // 🔹 Notify hospital/requester
     const messageToCreator = `Hello! Your shift request at ${hospital_name}, ${location}, on ${date} from ${start_time} to ${end_time} for a ${nurse_type} nurse has been cancelled by the nurse. We are looking for another to help cover it. Sorry for any inconvenience caused.`;
-    try {
-      await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-        recipient: created_by,
-        message: messageToCreator,
-      });
-      console.log("Message sent to", created_by);
-    } catch (error) {
-      console.error(`Failed to send message to ${created_by}:`, error.response?.data || error.message);
-    }
+    await sendMessage(created_by, messageToCreator);
 
   } catch (error) {
     console.error("Error cancelling nurse confirmed shift:", error);
@@ -291,10 +222,7 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
 
   if (shiftQuery.rows.length === 0) {
     const message = `The shift with ID ${shift_id} does not exist try putting in a valid shift ID.`;
-    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-      recipient: nursePhoneNumber,
-      message,
-    });
+    await sendMessage(nursePhoneNumber, message);
     return false;
   }
 
@@ -322,10 +250,7 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
   ) {
     console.log("DETAILS DID NOT MATCH")
     const message = `The shift with ID ${shift_id} does not match your details. Please resend the message with a shift ID of a shift offered to you.`;
-    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-      recipient: nursePhoneNumber,
-      message,
-    });
+    await sendMessage(nursePhoneNumber, message);
     return false;
   }
 
@@ -333,10 +258,7 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
 
   if (!availability) {
     const message = `The shift with ID ${shift_id} conflicts with your other shift and thus cannot be completed by you.`;
-    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-      recipient: nursePhoneNumber,
-      message,
-    });
+    await sendMessage(nursePhoneNumber, message);
     return false;
   }
 
