@@ -248,7 +248,7 @@ Example:
 User: I want to cancel shift number 1 and 3
 Bot: {
   "message": "Sure I will help you cancel shifts confirmed by Asha Sharma and Sunita Verma.",
-  shift_id:[1],
+  shift_id:[1,3],
   "cancellation": true
 }
 
@@ -274,7 +274,7 @@ Bot: {
       cancellation: true
       }
 
-      
+      If the user replies with just a number treate it like a shift_id and fill it inside that
        If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
       - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as continuation of prior intent.
       Make full use of past message history to make the messages sound reasonable and understandable

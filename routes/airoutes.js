@@ -3,7 +3,7 @@ const { generateReplyFromAI } = require('../helper/promptHelper.js');
 const router = express.Router();
 const { search_nurses, send_nurses_message } = require('../controller/nurse_controller.js');
 const { create_shift, search_shift, search_shift_by_id} = require('../controller/shift_controller.js');
-const { update_coordinator_chat_history, get_coordinator_chat_data } = require('../controller/coordinator_controller.js');
+const { update_coordinator_chat_history, get_coordinator_chat_data, validate_shift_before_cancellation } = require('../controller/coordinator_controller.js');
 router.post('/chat', async (req, res) => {
     const { sender, text } = req.body; 
 
@@ -62,13 +62,23 @@ router.post('/chat', async (req, res) => {
             }
         }
 
-        if (replyMessage.shift_id && replyMessage.cancellation){
-            const shiftIDArray = Array.isArray(replyMessage.shift_id) ? replyMessage.shift_id : [replyMessage.shift_id];
-            console.log("shift ID", replyMessage.shift_id)
+        if (replyMessage.shift_id && replyMessage.cancellation) {
+            const shiftIDArray = Array.isArray(replyMessage.shift_id)
+              ? replyMessage.shift_id
+              : [replyMessage.shift_id];
+          
+            console.log("Shift IDs:", shiftIDArray);
+          
             for (const shiftID of shiftIDArray) {
-              await search_shift_by_id(shiftID,sender)    
+              const isValid = await validate_shift_before_cancellation(shiftID, sender);
+          
+              if (!isValid) continue;
+          
+              await search_shift_by_id(shiftID, sender);
             }
         }
+          
+
         await update_coordinator_chat_history(sender, replyMessage.message, "sent")
         
     } catch (error) {
