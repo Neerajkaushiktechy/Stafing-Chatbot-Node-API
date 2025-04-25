@@ -1,6 +1,6 @@
 const { generateMessageForNurseAI } = require('../helper/promptHelper.js');
 const pool = require('../db.js');
-const axios = require('axios');
+const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
 async function search_nurses(nurse_type, shift, location) {
   try {
@@ -46,15 +46,7 @@ async function send_nurses_message(nurses, nurse_type, shift, location, hospital
       const AiMessage = message.message
       console.log("Message from AI for nurse",AiMessage)
       await update_nurse_chat_history(phoneNumber, AiMessage, 'sent')
-      try {
-        const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-          recipient: phoneNumber,
-          message: AiMessage,
-        });
-        console.log(`Message sent to ${phoneNumber}`);
-      } catch (error) {
-        console.error(`Failed to send message to ${phoneNumber}:`, error.response ? error.response.data : error.message);
-      } 
+      await sendMessage(phoneNumber, AiMessage)
     }
   }
 }

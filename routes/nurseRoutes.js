@@ -4,8 +4,8 @@ const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
 const { check_shift_status, search_shift, shift_cancellation_nurse, check_shift_validity} = require('../controller/shift_controller.js');
-const axios = require('axios');
 const { update_nurse_chat_history, get_nurse_chat_data } = require('../controller/nurse_controller.js');
+const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
 router.post('/chat_nurse', async (req, res) => {
     const { sender, text } = req.body; 
@@ -52,16 +52,8 @@ router.post('/chat_nurse', async (req, res) => {
               
                 const status = await check_shift_status(shiftID, sender);
                 if (status === 'filled') {
-                  try {
                     const message = 'Sorry, the shift has already been filled. We will update you when more shifts are available for you.';
-                    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-                      recipient: sender,
-                      message,
-                    });
-                    console.log(`Message sent to ${sender}`);
-                  } catch (error) {
-                    console.error(`Failed to send message to ${sender}:`, error.response ? error.response.data : error.message);
-                  }
+                    await sendMessage(sender,message)
                   continue;
                 }
               
