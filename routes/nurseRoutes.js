@@ -3,7 +3,7 @@ const pool = require('../db');
 const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
-const { check_shift_status, search_shift, shift_cancellation_nurse} = require('../controller/shift_controller.js');
+const { check_shift_status, search_shift, shift_cancellation_nurse, check_shift_validity} = require('../controller/shift_controller.js');
 const axios = require('axios');
 const { update_nurse_chat_history, get_nurse_chat_data } = require('../controller/nurse_controller.js');
 require('dotenv').config();
@@ -17,22 +17,7 @@ router.post('/chat_nurse', async (req, res) => {
         console.error('Error updating chat history:', error);
     }
 
-    try {
-        const { rows } = await pool.query(
-            `SELECT shift_id 
-             FROM chat_history  
-             WHERE receiver = $1 
-               AND shift_id IS NOT NULL 
-             ORDER BY created_at DESC 
-             LIMIT 1`,
-            [sender]
-        );
-        
-
-        const shift_id = rows.length > 0 ? rows[0].shift_id : null;
-
-        console.log("Found shift_id:", shift_id);
-          
+    try { 
         const pastMessages = await get_nurse_chat_data(sender)
         console.log("past messages", pastMessages);
         let replyMessage = await generateReplyFromAINurse(text,pastMessages);
@@ -58,23 +43,31 @@ router.post('/chat_nurse', async (req, res) => {
         }
         await update_nurse_chat_history(sender,replyMessage.message, "sent")
         res.json({ message: replyMessage.message});
-        if (replyMessage.confirmation==true) {
-            const status = await check_shift_status(shift_id)
-            if (status == 'filled'){
-                try {
-                    const message = 'Sorry the shift has already been filled, we will update you when more shifts are available for you'
-                      const response = await axios.post(`${process.env.HOST_MAC}/send_message/`, {
-                        recipient: sender,
-                        message: message,
-                      });
-                      console.log(`Message sent to ${sender}`);
-                    } catch (error) {
-                      console.error(`Failed to send message to ${sender}:`, error.response ? error.response.data : error.message);
-                    } 
-            }
-            else{
-                await update_coordinator(shift_id, sender)
-            }
+        if (replyMessage.confirmation==true && replyMessage.shift_id) {
+            const shift_id = replyMessage.shift_id
+            const shiftIDArray = Array.isArray(replyMessage.shift_id) ? replyMessage.shift_id : [replyMessage.shift_id];
+            for (const shiftID of shiftIDArray) {
+                const valid_shift = await check_shift_validity(shiftID, sender);
+                if (!valid_shift) continue;
+              
+                const status = await check_shift_status(shiftID, sender);
+                if (status === 'filled') {
+                  try {
+                    const message = 'Sorry, the shift has already been filled. We will update you when more shifts are available for you.';
+                    await axios.post(`${process.env.HOST_MAC}/send_message/`, {
+                      recipient: sender,
+                      message,
+                    });
+                    console.log(`Message sent to ${sender}`);
+                  } catch (error) {
+                    console.error(`Failed to send message to ${sender}:`, error.response ? error.response.data : error.message);
+                  }
+                  continue;
+                }
+              
+                await update_coordinator(shiftID, sender);
+              }
+              
         }
         if (replyMessage.shift_details && replyMessage.cancellation){
             const shiftDetailsArray = Array.isArray(replyMessage.shift_details) ? replyMessage.shift_details : [replyMessage.shift_details];

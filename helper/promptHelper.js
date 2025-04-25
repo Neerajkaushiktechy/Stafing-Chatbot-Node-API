@@ -239,17 +239,44 @@ async function generateReplyFromAI(text, pastMessages) {
       If the user has provided details for multiple shift cancellation, fill them in "shift_details" as an array of objects.
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
-      once the shift has been cancelled the conversations after that to the user shall be carried out in a normal booking style as mentioned earlier. 
-      If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
-      User: I want to cancel my shift
-      Bot: [Cancels shift]
 
-      User: Hi
-      Bot: {
-        message: "Hi there! How can I assist you today?",
-        nurse_details: null
+      The user can also have multiple shifts requested for the same time, same date, same hospital and same location. In that case we are sending user a message telling him/her about all the shifts found and ask him to tell us which shift would he like to delete. Look at the past messages and realize if the user was asked about which nurse he wants to delete or not
+      for example:-
+      If multiple shifts match the user's cancellation request, you show them and wait for user confirmation Once the user specifies the shift, you respond like this:
+
+Example:
+User: I want to cancel shift number 1 and 3
+Bot: {
+  "message": "Sure I will help you cancel shifts confirmed by Asha Sharma and Sunita Verma.",
+  shift_id:[1],
+  "cancellation": true
+}
+
+-  If user cancels just one shift, still use the "shift_id" array with one object.
+      once the shift has been cancelled the conversations after that to the user shall be carried out in a normal booking style as mentioned earlier. 
+      
+      ***Example of whole conversation***
+      User: I would like to cancel a shift
+      Bot:{
+      message: Sure, please provide me the shift details you would like to cancel
+      shift_details:null
+      cancellation: true
       }
-      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as      continuation of prior intent.
+      User: I would like to delete a shift requested at Fortis Delhi for an LVN nurse for PM shift on 25 april 2025 from 2PM to 10PM
+      ***We search the database to check if there are multiple shifts requested by the sender for the same location date and time if there are multiple shifts we ask user to tell us the ID of the shift he needs deleted***
+     
+      User: cancel shift with ID 1
+      or
+      User: 1
+      Bot{
+      message: okay i will delete shift with id 1
+      shift_id: 1
+      cancellation: true
+      }
+
+      
+       If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
+      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as continuation of prior intent.
       Make full use of past message history to make the messages sound reasonable and understandable
       Message from sender: "${text}"
       Past Message history: ${pastMessages}`,
@@ -268,18 +295,21 @@ async function generateReplyFromAINurse(text, pastMessages) {
     console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) to the staffing coordinator. You can only reply with true or false. return an object consisting a friendly message suitable to send the user and another value called confirmation which should contain true or false. like this 
+      contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) and a shift ID of the shift which the nurse wants to cover (the shift ID will be given to you by the nurse if you check the previous message). return an object consisting a friendly message suitable to send the user, another value called confirmation which should contain true or false and another called shift_id which has the id of the shift. like this 
       {
         "message": "Friendly text you want to send to user.",
-        confirmation: true or false
+        confirmation: true or false,
+        shift_id: shift ID
       
       }
         Always reply in this JSON format:
       {
         "message": "Friendly text you want to send to user.",
         confirmation: true or false
+        shift_id: shift ID
       }
 
+      If the nurse has not provided the shift ID ask them to provide the shift ID once again by using a friendly message.
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
 
@@ -365,6 +395,7 @@ async function generateReplyFromAINurse(text, pastMessages) {
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
       once the shift has been cancelled the conversations after that to the nurse shall be carried out in a normal shift confirmation style as mentioned earlier.
+      -If the nurse tries to cancel a shift using the ID do not let her do that instead ask her to provide the details of the shift just like mentioned before for shift cancellation process the ID will only work for shift confirmation not shift cancellation.
       - **Only act on shift cancellation** if the user's current message clearly expresses an intent to cancel (e.g., "I want to cancel", "please cancel my shift", "need to remove my booking", etc.).
       - **Past messages may be used for context**, but only if the current message shows continuation (e.g., providing details for a      cancellation already in progress).
       - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as      continuation of prior intent.
@@ -381,12 +412,12 @@ async function generateReplyFromAINurse(text, pastMessages) {
   }
 }
 
-async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages){
+async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages, shift_id){
   try {
     console.log("AI is generating a message...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Are you interesed in covering this shift" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
+      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Shift ID: (shift_id). Kindly tell me the ID of this shify you are interesed in covering" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
       Here are the required details.
       1. Nurse type: ${nurse_type}
       2. Shift: ${shift}
@@ -396,6 +427,7 @@ async function generateMessageForNurseAI(nurse_type, shift, hospital, location, 
       6. Start time: ${start_time}
       7. end time: ${end_time}
       8. Past Messages: ${pastMessages}
+      9. Shift ID: ${shift_id}
       
       return an object consisting a friendly message suitable to send the user like this 
       {
@@ -406,6 +438,14 @@ async function generateMessageForNurseAI(nurse_type, shift, hospital, location, 
         "message": "Friendly text you want to send to user.",
       }
 
+      For example you need to generate a message like this:-
+
+      Hello! an LVN is needed for a PM shift at Fortis Hospital in Delhi on 2025-05-02 from 2:00 PM to 10:00 PM. Shift ID is 97. Kindly reply with the shift id if you are interested in covering this.
+      
+      Make absolutely sure that you ask the nurse to verify which shift ID she is giving confirmation for ask the nurse to reply including the the shift ID if shift ID is not provided by the nurse ask her to provide the shift ID since booking cant be done without it.
+
+      The shift ID should be returned in the form of an array if the nurse provides more than one shift ID store them like [shiftID1, shiftID2] if only single ID is provided store it as [shiftID1]
+      If the nurse replies with a number consider it to be shift id.
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
       `,
