@@ -168,36 +168,6 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
   }
 }
 
-// async function match_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender, nurse_name) {
-//   try {
-//     const { rows } = await pool.query(`
-//       SELECT nurse_id FROM shift_tracker
-//       WHERE nurse_type ILIKE $1
-//         AND shift ILIKE $2
-//         AND location ILIKE $3
-//         AND hospital_name ILIKE $4
-//         AND date = $5
-//         AND start_time = $6
-//         AND end_time = $7
-//     `, [nurse_type, shift, location, hospital_name, date, start_time, end_time]);
-  
-//     for (const row of rows) {
-//       const nurseId = row.nurse_id;
-//       const nurseResult = await pool.query(`SELECT name, mobile_number FROM nurses WHERE id = $1`, [nurseId]);
-  
-//       if (nurseResult.rows.length > 0) {
-//         const name = nurseResult.rows[0].name;
-//         if (name.toLowerCase() === nurse_name.toLowerCase()) {
-//           console.log(`Match found: ${name}`)
-//           await delete_shift(row.id,sender,nurseId,nurse_type,shift,hospital_name,location,date,start_time,end_time)
-//         }
-//       }
-//     }
-//   } catch (error) {
-//     console.error("Error matching shift:", error);
-//   }
-  
-// }
 
 async function search_shift_by_id(shift_id, created_by){
   const {rows} = await pool.query(`
