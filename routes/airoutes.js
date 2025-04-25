@@ -77,15 +77,7 @@ router.post('/chat', async (req, res) => {
               await search_shift_by_id(shiftID, sender);
             }
           }
-          
-        // if (replyMessage.ambiguous_shifts && replyMessage.cancellation && replyMessage.shift_details){
-        //     const shiftDetailsArray = Array.isArray(replyMessage.ambiguous_shifts) ? replyMessage.ambiguous_shifts : [replyMessage.ambiguous_shifts];
-        //     console.log("shift details", replyMessage.ambiguous_shifts)
-        //     for (const shiftDetail of shiftDetailsArray) {
-        //       const { nurse_type, shift, location, hospital_name, date, start_time, end_time, nurse_name } = shiftDetail;
-        //         await match_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender, nurse_name)
-        //     }
-        // }
+
         await update_coordinator_chat_history(sender, replyMessage.message, "sent")
         
     } catch (error) {
