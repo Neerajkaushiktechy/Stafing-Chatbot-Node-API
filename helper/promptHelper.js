@@ -273,11 +273,10 @@ Bot: {
       shift_id: 1
       cancellation: true
       }
-
-      If the user replies with just a number treate it like a shift_id and fill it inside that
-       If the user's latest message is neutral like "Hi", "Hello", "Thanks", "Okay", etc., do not assume intent to cancel a shift, even if previous messages were related to cancellation. Start a new conversation or ask how you can assist.
-      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as continuation of prior intent.
+    - **Past messages may be used for context**, but only if the current message shows continuation (e.g., providing details for a      cancellation already in progress).
+      If the user replies with just a number treat it like a shift_id and fill it inside that
       Make full use of past message history to make the messages sound reasonable and understandable
+      Do make sure that you understand the context the user is trying to provide it can be either shift booking or shift cancellation make sure to differentiate between the two properly so that the user has a good experience.
       Message from sender: "${text}"
       Past Message history: ${pastMessages}`,
     });
@@ -396,9 +395,7 @@ async function generateReplyFromAINurse(text, pastMessages) {
       the message should look like it was sent by a human.
       once the shift has been cancelled the conversations after that to the nurse shall be carried out in a normal shift confirmation style as mentioned earlier.
       -If the nurse tries to cancel a shift using the ID do not let her do that instead ask her to provide the details of the shift just like mentioned before for shift cancellation process the ID will only work for shift confirmation not shift cancellation.
-      - **Only act on shift cancellation** if the user's current message clearly expresses an intent to cancel (e.g., "I want to cancel", "please cancel my shift", "need to remove my booking", etc.).
       - **Past messages may be used for context**, but only if the current message shows continuation (e.g., providing details for a      cancellation already in progress).
-      - After a shift cancellation is complete, **reset context** and treat new neutral messages as new conversation starts — not as      continuation of prior intent.
 
       Message from sender: "${text}". You will also be given the past message history for a nurse make use of past messages if you can to make the messages more friendly. 
       Past Messages: ${pastMessages}`,
