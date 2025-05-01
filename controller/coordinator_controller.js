@@ -1,6 +1,8 @@
 const pool = require('../db.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
+
+
 async function update_coordinator(shift_id, nurse_phoneNumber) {
     const nurse = await get_nurse_info(nurse_phoneNumber);
     console.log("Nurse fetched:", nurse);
@@ -10,7 +12,7 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
     const shiftInfo = await get_shift_information(shift_id);
 
     if (nurse && shiftInfo) {
-        const message = `Hello! Your shift requested at ${shiftInfo.hospital_name}, ${shiftInfo.location}, on ${shiftInfo.date} from ${shiftInfo.start_time} to ${shiftInfo.end_time} will be covered by ${nurse.name}. You can reach out via ${nurse.mobile_number}.`;
+        const message = `Hello! Your shift requested at ${shiftInfo.hospital_name}, ${shiftInfo.location}, on ${shiftInfo.date} from ${shiftInfo.start_time} to ${shiftInfo.end_time} will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
 
         console.log("Message to send:", message);
         await sendMessage(recipient, message);
@@ -135,5 +137,8 @@ async function validate_shift_before_cancellation(shift_id, phoneNumber) {
   }
   
 module.exports = {
-    update_coordinator, update_coordinator_chat_history, get_coordinator_chat_data, validate_shift_before_cancellation
+    update_coordinator, 
+    update_coordinator_chat_history, 
+    get_coordinator_chat_data, 
+    validate_shift_before_cancellation,
 };

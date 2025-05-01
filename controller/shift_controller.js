@@ -77,7 +77,7 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
           if (shift.nurse_id) {
             try {
               const result = await pool.query(
-                `SELECT name FROM nurses WHERE id = $1`,
+                `SELECT first_name FROM nurses WHERE id = $1`,
                 [shift.nurse_id]
               );
               if (result.rows.length > 0) {
