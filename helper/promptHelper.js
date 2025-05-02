@@ -116,6 +116,17 @@ async function generateReplyFromAI(text, pastMessages) {
   User: I need a nurse for 40 March
   Bot: (Witty response)
   
+  Do not worry about the timing for now and just let the user book a nurse for whatever timing he provides as long as it is valid meaning that it is not some non existent time like 28PM or something.
+  for example:-
+  user: I need a nurse from 28PM to 30PM
+  bot: I am sorry but the time is incorrect (or any other witty response)
+
+  user: I need a nurse for a pm shift from 11am to 9pm
+  bot: (work as normally for nurse booking)
+
+  user: I need a nurse for an am shift from 2PM to 7am
+  bot: (work as normally for nurse booking)
+  
   finally the response should be generated like this 
   {
     "message": "Friendly text you want to send to user.",
