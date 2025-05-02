@@ -6,8 +6,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function generateReplyFromAI(text, pastMessages) {
   try {
-    console.log("PAST MESSAGE", pastMessages)
-    console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: `You are an AI chatbot used to schedule appointments. The staffing agency will be sending you a message to tell the requirement of the nurse it wants. Keep the conversation around booking the nurse, if the conversation sways away from the topic circle it back again. The information you require from the staff is as follows:-
@@ -302,7 +300,6 @@ Bot: {
 
 async function generateReplyFromAINurse(text, pastMessages) {
   try {
-    console.log("AI is generating a reply...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: ` You are an AI chatbot for a nurse who has gotten a message informing him/her about an opening available at a hospital near her location. The nurse will be replying to you with either a positive messsage like (yes, cheers, sure, i am available, will do or any other message that means he/she will be covering a shift) or a negative message (already booked, cant do that, no, i am busy, not available or any other message which means she will not be covering a shift) return a boolean response (either true or false) and a shift ID of the shift which the nurse wants to cover (the shift ID will be given to you by the nurse if you check the previous message). return an object consisting a friendly message suitable to send the user, another value called confirmation which should contain true or false and another called shift_id which has the id of the shift. like this 
@@ -422,7 +419,6 @@ async function generateReplyFromAINurse(text, pastMessages) {
 
 async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages, shift_id){
   try {
-    console.log("AI is generating a message...");
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Shift ID: (shift_id). Kindly tell me the ID of this shify you are interesed in covering" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.

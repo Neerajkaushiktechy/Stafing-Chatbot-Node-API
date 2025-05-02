@@ -6,24 +6,19 @@ const pool = require('../db');
 async function admin_login(req,res){
     try {
         const {email, password} = req.body
-        console.log("CREDS", email,password)
         const result = await pool.query(`
             SELECT * FROM admin
             WHERE email = $1
             `,[email])
         if (result.rows.length == 0){
-            console.log("user not found")
             return res.json({message: "Invalid Credentials",
                                         status: 404
             })
         }
         const user = result.rows[0]
         const hashedPassword = await bcrypt.hash(password, 10);
-        console.log(hashedPassword)
         const password_check = await bcrypt.compare(password, user.password)
-        console.log("check",password_check)
         if (!password_check){
-            console.log("password did not match")
             return res.json({message:"Invalid Credentials",
                                         status:404
             })
@@ -65,7 +60,6 @@ async function add_facility(req, res) {
             name, city, address, state, zip, multiplier,
             phone, nurses
         } = req.body;
-        console.log(name, city, address, state, zip, multiplier, phone, nurses);
         const cityStateZip = `${city.trim()}, ${state.trim()}, ${zip.trim()}`;
 
         const phone_number = await client.query(`
@@ -138,7 +132,6 @@ async function edit_facility(req, res) {
             name, city, address, state, zip, multiplier,
             phone, nurses
         } = req.body;
-        console.log(name, city, address, state, zip, multiplier, phone, nurses);
         const cityStateZip = `${city.trim()}, ${state.trim()}, ${zip.trim()}`;
         
         await client.query('BEGIN');

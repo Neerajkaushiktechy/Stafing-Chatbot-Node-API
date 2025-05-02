@@ -6,7 +6,6 @@ const sendMessage = async (recipient, message) => {
             recipient,
             message,
         });
-        console.log("message sent to", recipient, "message", message)
         return response.data;
     } catch (error) {
         console.error(`Failed to send message to ${recipient}:`, error.response ? error.response.data : error.message);

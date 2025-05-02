@@ -3,7 +3,6 @@ require('dotenv').config();
 // Middleware to check the token in cookies
 const authenticateToken = (req, res) => {
     const token = req.cookies.auth_token;  // Read token from cookie
-    console.log("TOKEN",token)
     if (!token) {
       return res.json({ message: 'No token, authorization denied',status: 404, loggedIn:false });
     }

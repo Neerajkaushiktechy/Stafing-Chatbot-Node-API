@@ -9,8 +9,6 @@ require('dotenv').config();
 
 router.post('/chat_nurse', async (req, res) => {
     const { sender, text } = req.body; 
-
-    console.log('Received:', sender, text);
     try {
         await update_nurse_chat_history(sender,text, "received")
     } catch (error) {
@@ -19,23 +17,18 @@ router.post('/chat_nurse', async (req, res) => {
 
     try { 
         const pastMessages = await get_nurse_chat_data(sender)
-        console.log("past messages", pastMessages);
         let replyMessage = await generateReplyFromAINurse(text,pastMessages);
-        console.log("Raw reply generated:", replyMessage);
 
         // Check if replyMessage is a string and starts with ```json
         if (typeof replyMessage === 'string') {
             replyMessage = replyMessage.trim();
             if (replyMessage.startsWith('```json')) {
                 replyMessage = replyMessage.replace(/```json|```/g, '').trim();
-                console.log("JSON reply generated:", replyMessage);
             } else if (replyMessage.startsWith('```')) {
                 replyMessage = replyMessage.replace(/```/g, '').trim();
-                console.log("JSON reply generated:", replyMessage);
             }
             try {
                 replyMessage = JSON.parse(replyMessage);
-                console.log("Parsed reply generated:", replyMessage);
             } catch (parseError) {
                 console.error('Failed to parse AI reply:', parseError);
                 return res.status(500).json({ message: "Invalid AI response format." });
@@ -63,7 +56,6 @@ router.post('/chat_nurse', async (req, res) => {
         }
         if (replyMessage.shift_details && replyMessage.cancellation){
             const shiftDetailsArray = Array.isArray(replyMessage.shift_details) ? replyMessage.shift_details : [replyMessage.shift_details];
-            console.log("shift details", replyMessage.shift_details)
             for (const shiftDetail of shiftDetailsArray) {
               const { nurse_type, shift, location, hospital_name, date, start_time, end_time } = shiftDetail;
               await shift_cancellation_nurse(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender)

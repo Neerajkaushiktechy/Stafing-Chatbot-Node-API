@@ -5,7 +5,6 @@ require('dotenv').config();
 
 async function update_coordinator(shift_id, nurse_phoneNumber) {
     const nurse = await get_nurse_info(nurse_phoneNumber);
-    console.log("Nurse fetched:", nurse);
 
     await update_shift_status(shift_id, nurse.id);
     const recipient = await get_coordinator_number(shift_id);
@@ -14,7 +13,6 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
     if (nurse && shiftInfo) {
         const message = `Hello! Your shift requested at ${shiftInfo.hospital_name}, ${shiftInfo.location}, on ${shiftInfo.date} from ${shiftInfo.start_time} to ${shiftInfo.end_time} will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
 
-        console.log("Message to send:", message);
         await sendMessage(recipient, message);
     } else {
         console.error("Missing nurse or shift information. Cannot send message.");
@@ -46,8 +44,6 @@ async function update_shift_status(shift_id, nurse_id) {
                 nurse_id = $2
             WHERE id = $1
         `, [shift_id, nurse_id]);
-
-        console.log(`Shift ${shift_id} updated to filled with nurse ${nurse_id}`);
     } catch (error) {
         console.error('Error updating shift status:', error);
     }
@@ -62,7 +58,6 @@ async function get_coordinator_number(shift_id) {
         `, [shift_id]);
         
         const recipient = rows.length > 0 ? rows[0].created_by : null;
-        console.log("Recipient:", recipient);
         return recipient;
     } catch (error) {
         console.error("Error fetching coordinator number:", error);
@@ -78,7 +73,6 @@ async function get_shift_information(shift_id) {
         `, [shift_id]);
 
         const shiftInfo = rows.length > 0 ? rows[0] : null;
-        console.log("Shift information:", shiftInfo);
         return shiftInfo;
     } catch (error) {
         console.error("Error fetching shift information:", error);
@@ -92,7 +86,6 @@ async function update_coordinator_chat_history(sender, text, type) {
         (sender, message, message_type)
         VALUES ($1, $2, $3)
       `, [sender, text, type]);
-      console.log('Message successfully inserted for coordinator.');
     } catch (err) {
       console.error('Error updating coordinator chat history:', err);
     }
@@ -104,7 +97,6 @@ async function get_coordinator_chat_data(sender){
             SELECT message from coordinator_chat_data
             WHERE sender = $1
             `,[sender])
-        console.log("Coordinator chat history")
         const pastMessages = result.rows.map(row => row.message);
         return pastMessages
     } catch (error) {

@@ -13,8 +13,6 @@ async function create_shift(created_by,nurse_type, shift, location, hospital_nam
           RETURNING id
         `, [created_by, hospital_name, location, nurse_type, shift, nurse_id, status, date, start_time,end_time]); // You can set 'created_by' to 'admin' or your logic
     
-        console.log('Shift created successfully');
-        console.log("shift id",result.rows[0].id )
         return result.rows[0].id;
     }catch (err) {
         console.error('Error creating tables:', err);
@@ -61,13 +59,9 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
         const date = rows[0].date;
         const start_time = rows[0].start_time;
         const end_time = rows[0].end_time;
-        console.log("shift found with id", shift_id)
         await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time);
       }
       else if (rows.length > 1) {
-        for (let i=0; i< rows.length; i++){
-          console.log("FOUND THIS ", rows[i])
-        }
         let message = `We found multiple shifts matching your request:\n\n`;
       
         for (let i = 0; i < rows.length; i++) {
@@ -118,7 +112,6 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
           const nurse_phoneNumber = rows[0].mobile_number
           const message = `The shift you confirmed at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} has been cancelled by the coordinator. We are sorry for any inconvinience caused`
           await sendMessage(nurse_phoneNumber,message)
-            console.log("nurse informed about cancellation")
        }
      
   } catch (error) {
@@ -161,7 +154,6 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
       // 🔹 Improvement: Early return to avoid nesting
       const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} does not exist or has been deleted already.`;
       await sendMessage(sender, message);
-      console.log("Shift not found, user informed.");
       return;
     }
 
@@ -213,7 +205,6 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
 }
 
 async function check_shift_validity(shift_id, nursePhoneNumber) {
-  console.log(`Checking validity of nurse ${nursePhoneNumber} for shift ${shift_id}`)
   const shiftQuery = await pool.query(`
     SELECT shift, location, nurse_type
     FROM shift_tracker
@@ -248,7 +239,6 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     location.toLowerCase() !== nurseLocation.toLowerCase() ||
     type.toLowerCase() !== nurseType.toLowerCase()
   ) {
-    console.log("DETAILS DID NOT MATCH")
     const message = `The shift with ID ${shift_id} does not match your details. Please resend the message with a shift ID of a shift offered to you.`;
     await sendMessage(nursePhoneNumber, message);
     return false;
