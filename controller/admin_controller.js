@@ -176,17 +176,35 @@ async function edit_facility(req, res) {
             const netWorkMs = workMs - mealMs;
             const hours = netWorkMs / (1000 * 60 * 60); // Final shift duration in hours
 
+            const existingShift = await client.query(`
+                SELECT * FROM shifts
+                WHERE facility_id = $1 AND role = $2
+            `, [id, nurse.nurseType]);
+            if (existingShift.rows.length == 0) {
             await client.query(`
-                UPDATE shifts
-                SET role = $2, am_time_start = $3, am_time_end = $4, pm_time_start = $5, pm_time_end = $6,
-                noc_time_start = $7, noc_time_end = $8, am_meal_start = $9, am_meal_end = $10, pm_meal_start = $11,
-                pm_meal_end = $12, noc_meal_start = $13, noc_meal_end = $14, rate = $15, hours = $16
-                WHERE facility_id = $1
-            `, [
-                id, nurse.nurseType, nurse.amTimeStart, nurse.amTimeEnd, nurse.pmTimeStart, nurse.pmTimeEnd,
-                nurse.nocTimeStart, nurse.nocTimeEnd, nurse.amMealStart, nurse.amMealEnd, nurse.pmMealStart,
-                nurse.pmMealEnd, nurse.nocMealStart, nurse.nocMealEnd, nurse.rate, hours
-            ]);
+                INSERT INTO shifts
+                (facility_id,role, am_time_start, am_time_end, pm_time_start, pm_time_end,
+                noc_time_start, noc_time_end, am_meal_start, am_meal_end, pm_meal_start,
+                pm_meal_end , noc_meal_start , noc_meal_end , rate , hours)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,[
+                    id, nurse.nurseType, nurse.amTimeStart, nurse.amTimeEnd, nurse.pmTimeStart, nurse.pmTimeEnd,
+                    nurse.nocTimeStart, nurse.nocTimeEnd, nurse.amMealStart, nurse.amMealEnd, nurse.pmMealStart,
+                    nurse.pmMealEnd, nurse.nocMealStart, nurse.nocMealEnd, nurse.rate, hours
+                ])
+            }
+            else{
+                await client.query(`
+                    UPDATE shifts
+                    SET role = $2, am_time_start = $3, am_time_end = $4, pm_time_start = $5, pm_time_end = $6,
+                    noc_time_start = $7, noc_time_end = $8, am_meal_start = $9, am_meal_end = $10, pm_meal_start = $11,
+                    pm_meal_end = $12, noc_meal_start = $13, noc_meal_end = $14, rate = $15, hours = $16
+                    WHERE facility_id = $1
+                `, [
+                    id, nurse.nurseType, nurse.amTimeStart, nurse.amTimeEnd, nurse.pmTimeStart, nurse.pmTimeEnd,
+                    nurse.nocTimeStart, nurse.nocTimeEnd, nurse.amMealStart, nurse.amMealEnd, nurse.pmMealStart,
+                    nurse.pmMealEnd, nurse.nocMealStart, nurse.nocMealEnd, nurse.rate, hours
+                ]);
+            }
         }
 
         await client.query('COMMIT');
@@ -397,6 +415,19 @@ async function delete_facility(req,res){
     }
 }
 
+async function delete_service(req,res){
+    try {
+        const {id,role} = req.params;
+        await pool.query(`
+            DELETE FROM shifts
+            WHERE facility_id = $1 AND role ILIKE $2`,
+            [id,role])
+        res.json({message:"Service deleted successfully", status:200})
+    } catch (error) {
+        res.status(500).json({message:"An Error has occurred",status:500})
+        console.error(error)
+    }
+}
 module.exports = {
     admin_login,
     add_facility,
@@ -411,6 +442,7 @@ module.exports = {
     get_nurse_by_id,
     edit_nurse,
     delete_facility,
-    delete_nurse
+    delete_nurse,
+    delete_service
 
 }
