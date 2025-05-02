@@ -407,8 +407,9 @@ async function generateReplyFromAINurse(text, pastMessages) {
       once the shift has been cancelled the conversations after that to the nurse shall be carried out in a normal shift confirmation style as mentioned earlier.
       -If the nurse tries to cancel a shift using the ID do not let her do that instead ask her to provide the details of the shift just like mentioned before for shift cancellation process the ID will only work for shift confirmation not shift cancellation.
       - **Past messages may be used for context**, but only if the current message shows continuation (e.g., providing details for a      cancellation already in progress).
-
-      Message from sender: "${text}". You will also be given the past message history for a nurse make use of past messages if you can to make the messages more friendly. 
+      Know that the nurses are not allowed to make nurse bookings they are using you only to get and send details about the shifts they have confirmed or cancelled. So do not let them book a nurse using you.
+      Message from sender: "${text}". 
+      You will also be given the past message history for a nurse make use of past messages if you can to make the messages more friendly. 
       Past Messages: ${pastMessages}`,
     });
 
