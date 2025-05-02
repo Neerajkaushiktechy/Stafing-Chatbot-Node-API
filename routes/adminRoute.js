@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {admin_login,get_nurse_by_id, add_facility, logout, get_facility, get_nurses, add_nurse, add_nurse_type, get_nurse_type, edit_facility, get_facility_by_id, delete_facility,delete_nurse} = require('../controller/admin_controller');
+const {admin_login,get_nurse_by_id, add_facility, logout, get_facility, get_nurses, add_nurse, add_nurse_type, get_nurse_type, edit_facility, get_facility_by_id, delete_facility,delete_nurse, delete_service} = require('../controller/admin_controller');
 const jwt = require('jsonwebtoken');
 const authenticateToken = require('../middleware/authenticateToken');
 
@@ -20,4 +20,5 @@ router.get('/get-facility-by-id/:id',get_facility_by_id)
 router.get('/get-nurse-by-id/:id',get_nurse_by_id)
 router.delete('/delete-facility/:id',delete_facility)
 router.delete('/delete-nurse/:id',delete_nurse)
+router.delete('/delete-service/:id/:role',delete_service)
 module.exports = router;
