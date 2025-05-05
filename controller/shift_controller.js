@@ -3,15 +3,22 @@ const { search_nurses, send_nurses_message, check_nurse_availability } = require
 const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 
-async function create_shift(created_by,nurse_type, shift, location, hospital_name,date, start_time, end_time, nurse_id=null, status="open")
+async function create_shift(created_by,nurse_type, shift,date, nurse_id=null, status="open")
 {
     try {
+        const { rows } = await pool.query(`
+          SELECT city_state_zip, name
+          FROM facilities
+          WHERE phone = $1 OR email = $1
+          `,[created_by])
+        const location = rows[0].city_state_zip
+        const name = rows[0].name
         const result = await pool.query(`
           INSERT INTO shift_tracker 
-          (created_by, hospital_name, location, nurse_type, shift, nurse_id, status, date, start_time, end_time)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          (created_by, nurse_type, shift, nurse_id, status, date,location,name)
+          VALUES ($1, $2, $3, $4, $5, $6,$7,$8)
           RETURNING id
-        `, [created_by, hospital_name, location, nurse_type, shift, nurse_id, status, date, start_time,end_time]); // You can set 'created_by' to 'admin' or your logic
+        `, [created_by,nurse_type, shift, nurse_id, status, date,location,name]);
     
         return result.rows[0].id;
     }catch (err) {
@@ -216,7 +223,7 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     await sendMessage(nursePhoneNumber, message);
     return false;
   }
-
+  console.log("SHIFT QUERY", shiftQuery.rows[0])
   const { shift, location, nurse_type: type } = shiftQuery.rows[0];
 
   const nurseQuery = await pool.query(`
@@ -233,10 +240,15 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     location: nurseLocation,
     nurse_type: nurseType,
   } = nurseQuery.rows[0];
+  const [city, state, zip] = location.split(',').map(part => part.trim()).filter(Boolean);
+  const locationMatch =
+  nurseLocation.toLowerCase().includes(city?.toLowerCase() || '') ||
+  nurseLocation.toLowerCase().includes(state?.toLowerCase() || '') ||
+  nurseLocation.toLowerCase().includes(zip?.toLowerCase() || '');
 
   if (
     shift.toLowerCase() !== nurseShift.toLowerCase() ||
-    location.toLowerCase() !== nurseLocation.toLowerCase() ||
+    !locationMatch ||
     type.toLowerCase() !== nurseType.toLowerCase()
   ) {
     const message = `The shift with ID ${shift_id} does not match your details. Please resend the message with a shift ID of a shift offered to you.`;

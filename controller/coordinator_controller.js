@@ -11,7 +11,7 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
     const shiftInfo = await get_shift_information(shift_id);
 
     if (nurse && shiftInfo) {
-        const message = `Hello! Your shift requested at ${shiftInfo.hospital_name}, ${shiftInfo.location}, on ${shiftInfo.date} from ${shiftInfo.start_time} to ${shiftInfo.end_time} will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
+        const message = `Hello! Your shift requested at ${shiftInfo.name}, ${shiftInfo.location}, on ${shiftInfo.date} for ${shiftInfo.shift} shift has been filled. This shift will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
 
         await sendMessage(recipient, message);
     } else {
@@ -67,7 +67,7 @@ async function get_coordinator_number(shift_id) {
 async function get_shift_information(shift_id) {
     try {
         const { rows } = await pool.query(`
-            SELECT hospital_name, location, date, start_time, end_time
+            SELECT location, date, shift, name
             FROM shift_tracker
             WHERE id = $1
         `, [shift_id]);

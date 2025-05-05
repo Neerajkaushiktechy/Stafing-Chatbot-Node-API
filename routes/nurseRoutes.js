@@ -34,6 +34,7 @@ router.post('/chat_nurse', async (req, res) => {
                 return res.status(500).json({ message: "Invalid AI response format." });
             }
         }
+        await sendMessage(sender,replyMessage.message)
         await update_nurse_chat_history(sender,replyMessage.message, "sent")
         res.json({ message: replyMessage.message});
         if (replyMessage.confirmation==true && replyMessage.shift_id) {
@@ -49,7 +50,6 @@ router.post('/chat_nurse', async (req, res) => {
                     await sendMessage(sender,message)
                   continue;
                 }
-              
                 await update_coordinator(shiftID, sender);
               }
               

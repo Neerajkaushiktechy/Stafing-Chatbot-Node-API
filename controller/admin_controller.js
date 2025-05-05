@@ -57,15 +57,14 @@ async function add_facility(req, res) {
         await client.query('BEGIN');
 
         const {
-            name, city, address, state, zip, multiplier,
+            name, address, cityStateZip, multiplier,
             phone, nurses,email
         } = req.body;
-        const cityStateZip = `${city.trim()}, ${state.trim()}, ${zip.trim()}`;
 
         const phone_number = await client.query(`
             SELECT * FROM facilities
-            WHERE phone = $1
-        `, [phone]);
+            WHERE phone = $1 AND email = $2
+        `, [phone,email]);
 
         if (phone_number.rows.length > 0) {
             await client.query('ROLLBACK');
@@ -78,7 +77,7 @@ async function add_facility(req, res) {
         const facilityInsert = await client.query(`
             INSERT INTO facilities
             (name, address, city_state_zip, phone, overtime_multiplier, email)
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5,$6)
             RETURNING id
         `, [name, address, cityStateZip, phone, multiplier,email]);
 
@@ -129,10 +128,9 @@ async function edit_facility(req, res) {
     try {
         const id = req.params.id;
         const {
-            name, city, address, state, zip, multiplier,
+            name, address, cityStateZip, multiplier,
             phone, nurses, email
         } = req.body;
-        const cityStateZip = `${city.trim()}, ${state.trim()}, ${zip.trim()}`;
         
         await client.query('BEGIN');
         
@@ -306,12 +304,12 @@ async function get_nurses(req, res) {
 
 async function add_nurse(req,res){
     try {
-        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location} = req.body
+        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location, shift} = req.body
         await pool.query(`
             INSERT INTO nurses
-            (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type, mobile_number,location)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone,location])
+            (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type, mobile_number,location, shift)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone,location,shift])
         res.json({message:"Nurse added successfully", status:200})
     } catch (error) {
         res.status(500).json({message:"An Error has occured",status:500})
@@ -368,12 +366,12 @@ async function get_nurse_type(req, res) {
 async function edit_nurse(req,res){
     try {
         const { id } = req.params;
-        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location } = req.body
+        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location,shift } = req.body
         await pool.query(`
             UPDATE nurses
-            SET first_name = $1, last_name = $2, schedule_name = $3, rate = $4, shift_dif = $5, ot_rate = $6, email = $7, talent_id = $8, nurse_type = $9, mobile_number = $10, location = $12
+            SET first_name = $1, last_name = $2, schedule_name = $3, rate = $4, shift_dif = $5, ot_rate = $6, email = $7, talent_id = $8, nurse_type = $9, mobile_number = $10, location = $12, shift = $13
             WHERE id = $11`,
-        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone, id, location])
+        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone, id, location, shift])
         res.json({message:"Nurse added successfully", status:200})
     } catch (error) {
         res.status(500).json({message:"An Error has occured",status:500})
