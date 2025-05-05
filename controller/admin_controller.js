@@ -58,7 +58,7 @@ async function add_facility(req, res) {
 
         const {
             name, city, address, state, zip, multiplier,
-            phone, nurses
+            phone, nurses,email
         } = req.body;
         const cityStateZip = `${city.trim()}, ${state.trim()}, ${zip.trim()}`;
 
@@ -77,10 +77,10 @@ async function add_facility(req, res) {
 
         const facilityInsert = await client.query(`
             INSERT INTO facilities
-            (name, address, city_state_zip, phone, overtime_multiplier)
+            (name, address, city_state_zip, phone, overtime_multiplier, email)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
-        `, [name, address, cityStateZip, phone, multiplier]);
+        `, [name, address, cityStateZip, phone, multiplier,email]);
 
         const facilityId = facilityInsert.rows[0].id;
 
@@ -130,7 +130,7 @@ async function edit_facility(req, res) {
         const id = req.params.id;
         const {
             name, city, address, state, zip, multiplier,
-            phone, nurses
+            phone, nurses, email
         } = req.body;
         const cityStateZip = `${city.trim()}, ${state.trim()}, ${zip.trim()}`;
         
@@ -139,8 +139,8 @@ async function edit_facility(req, res) {
         if (phone) {
             const phone_number = await client.query(`
                 SELECT * FROM facilities
-                WHERE phone = $1 AND id != $2
-            `, [phone,id]);
+                WHERE phone = $1 AND email = $2 AND id != $3
+            `, [phone,email,id]);
 
             if (phone_number.rows.length > 0) {
                 await client.query('ROLLBACK');
@@ -153,9 +153,9 @@ async function edit_facility(req, res) {
 
         await client.query(`
             UPDATE facilities
-            SET name = $1, address = $2, city_state_zip = $3, phone = $4, overtime_multiplier = $5
+            SET name = $1, address = $2, city_state_zip = $3, phone = $4, overtime_multiplier = $5, email = $7
             WHERE id = $6
-        `, [name, address, cityStateZip, phone, multiplier, id]);
+        `, [name, address, cityStateZip, phone, multiplier, id, email]);
 
         function timeStringToMs(timeStr) {
             if (!timeStr) return 0;
@@ -306,12 +306,12 @@ async function get_nurses(req, res) {
 
 async function add_nurse(req,res){
     try {
-        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position } = req.body
+        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location} = req.body
         await pool.query(`
             INSERT INTO nurses
-            (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position])
+            (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type, mobile_number,location)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone,location])
         res.json({message:"Nurse added successfully", status:200})
     } catch (error) {
         res.status(500).json({message:"An Error has occured",status:500})
@@ -367,12 +367,13 @@ async function get_nurse_type(req, res) {
 
 async function edit_nurse(req,res){
     try {
-        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position } = req.body
+        const { id } = req.params;
+        const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location } = req.body
         await pool.query(`
             UPDATE nurses
-            SET first_name = $1, last_name = $2, schedule_name = $3, rate = $4, shift_dif = $5, ot_rate = $6, email = $7, talent_id = $8, nurse_type = $9
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position])
+            SET first_name = $1, last_name = $2, schedule_name = $3, rate = $4, shift_dif = $5, ot_rate = $6, email = $7, talent_id = $8, nurse_type = $9, mobile_number = $10, location = $12
+            WHERE id = $11`,
+        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone, id, location])
         res.json({message:"Nurse added successfully", status:200})
     } catch (error) {
         res.status(500).json({message:"An Error has occured",status:500})
@@ -421,6 +422,59 @@ async function delete_service(req,res){
         console.error(error)
     }
 }
+
+async function get_nurse_types(req, res) {
+    try {
+        const { rows } = await pool.query(`SELECT * FROM nurse_type`);
+        res.json({
+            message: "Nurse types fetched successfully",
+            nurse_types: rows,
+            status: 200
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            message: "An error has occurred",
+            status: 500
+        });
+    }
+    
+}
+
+router.delete('/delete-nurse-type/:id', delete_nurse_type)
+
+async function delete_nurse_type(req, res) {
+    try {
+        const { id } = req.params;
+        await pool.query(`
+            DELETE FROM nurse_type
+            WHERE id = $1`,
+            [id]
+        );
+        res.json({ message: "Nurse type deleted successfully", status: 200 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "An error has occurred", status: 500 });
+    }
+}
+
+async function edit_nurse_type(req, res) {
+    try {
+        const { id } = req.params;
+        const { nurse_type } = req.body;
+        await pool.query(`
+            UPDATE nurse_type
+            SET nurse_type = $1
+            WHERE id = $2`,
+            [nurse_type, id]
+        );
+        res.json({ message: "Nurse type updated successfully", status: 200 });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "An error has occurred", status: 500 });
+    }
+}
 module.exports = {
     admin_login,
     add_facility,
@@ -436,6 +490,9 @@ module.exports = {
     edit_nurse,
     delete_facility,
     delete_nurse,
-    delete_service
+    delete_service,
+    get_nurse_types,
+    delete_nurse_type,
+    edit_nurse_type
 
 }
