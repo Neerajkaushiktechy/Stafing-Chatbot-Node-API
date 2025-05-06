@@ -76,7 +76,7 @@ async function search_shift(nurse_type, shift,date,created_by) {
                 [shift.nurse_id]
               );
               if (result.rows.length > 0) {
-                nurse_name = result.rows[0].name;
+                nurse_name = result.rows[0].first_name;
               }
             } catch (err) {
               console.error(`Error fetching nurse name for id ${shift.nurse_id}:`, err.message);
