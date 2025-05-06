@@ -538,7 +538,6 @@ async function get_shifts(req, res) {
     try {
       const result = await pool.query(query, values);
       const events = [];
-  
       for (const row of result.rows) {
         const { created_by, nurse_type, shift: shiftValue, date } = row;
         const {rows: nurse} = await pool.query(`
@@ -585,7 +584,12 @@ async function get_shifts(req, res) {
         }
   
         // Construct datetime strings for FullCalendar
-const formattedDate = new Date(date).toISOString().split('T')[0]; // gives "2025-06-01"
+        const localDate = new Date(date);
+        const year = localDate.getFullYear();
+        const month = String(localDate.getMonth() + 1).padStart(2, '0');
+        const day = String(localDate.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+         // gives "2025-06-01"
 const start = `${formattedDate}T${startTime}`; // "2025-06-01T12:00:00"
 const end = `${formattedDate}T${endTime}`;     // "2025-06-01T20:00:00"
 
@@ -606,7 +610,6 @@ const end = `${formattedDate}T${endTime}`;     // "2025-06-01T20:00:00"
           },
         });
       }
-  
       res.json({ events, status: 200 });
     } catch (err) {
       console.error('Error fetching shifts:', err);
