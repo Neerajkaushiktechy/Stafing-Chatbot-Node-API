@@ -128,9 +128,36 @@ async function validate_shift_before_cancellation(shift_id, phoneNumber) {
     return true;
   }
   
+async function check_nurse_type(sender,nurse_type) {
+    const { rows } = await pool.query(`
+        SELECT * 
+        FROM nurse_type 
+        WHERE nurse_type = $1
+    `, [nurse_type]);
+    if (rows.length === 0) {
+        return false;
+    }
+    const facility = await pool.query(`
+        SELECT id
+        FROM facilities 
+        WHERE phone = $1 OR email = $1
+        `, [sender]);
+    const facility_id = facility.rows[0].id;
+    const result = await pool.query(`
+        SELECT * 
+        FROM shifts 
+        WHERE role = $1 
+        AND facility_id = $2
+    `, [nurse_type, facility_id]);
+    if (result.rows.length === 0) {
+        return false;
+    }
+    return true;
+}
 module.exports = {
     update_coordinator, 
     update_coordinator_chat_history, 
     get_coordinator_chat_data, 
     validate_shift_before_cancellation,
+    check_nurse_type
 };
