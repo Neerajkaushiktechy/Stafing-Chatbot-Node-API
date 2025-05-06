@@ -153,7 +153,7 @@ async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
     if (rows.length === 0) {
       // 🔹 Improvement: Early return to avoid nesting
       const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift scheduled on ${date} does not exist or has been deleted already.`;
-      await sendMessage(sender, message);
+      await sendMessage(phoneNumber, message);
       return;
     }
 
@@ -171,11 +171,12 @@ async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
 
     // 🔹 Message to nurse
     const messageToNurse = `The shift you confirmed at ${name}, ${location} on ${date} for ${nurse_type} has been cancelled.`;
-    await sendMessage(sender, messageToNurse)
+    await sendMessage(phoneNumber, messageToNurse)
 
     // 🔹 Fetch nurses and exclude sender
-    let nurses = await search_nurses(nurse_type, shift, location);
-    nurses = nurses.filter(nurse => nurse.mobile_number !== sender);
+    let nurses = await search_nurses(nurse_type, shift, shift_id);
+    console.log("NURSES", nurses)
+    nurses = nurses.filter(nurse => nurse.mobile_number !== phoneNumber);
 
     // 🔹 Message to other nurses
     await send_nurses_message(nurses, nurse_type, shift, shift_id, date);

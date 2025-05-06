@@ -4,6 +4,7 @@ const router = express.Router();
 const { search_nurses, send_nurses_message } = require('../controller/nurse_controller.js');
 const { create_shift, search_shift, search_shift_by_id} = require('../controller/shift_controller.js');
 const { update_coordinator_chat_history, get_coordinator_chat_data, validate_shift_before_cancellation, check_nurse_type } = require('../controller/coordinator_controller.js');
+const { sendMessage } = require('../services/sendMessageAPI.js');
 router.post('/chat', async (req, res) => {
     const { sender, text } = req.body; 
 
@@ -11,7 +12,7 @@ router.post('/chat', async (req, res) => {
     const pastMessages = await get_coordinator_chat_data(sender)
     try {
         let replyMessage = await generateReplyFromAI(text,pastMessages);
-
+        console.log('reply from ai', replyMessage)
         // Check if replyMessage is a string and starts with ```json
         if (typeof replyMessage === 'string') {
             replyMessage = replyMessage.trim();
@@ -36,7 +37,7 @@ router.post('/chat', async (req, res) => {
               const { nurse_type, shift, date } = nurseDetail;
               const nurseExists = await check_nurse_type(sender,nurse_type);
                 if (!nurseExists) {
-                    await sendMessage(sender, "Please register your nurse type first");
+                    await sendMessage(sender, "The nurse type you requested is not linked with your account. Please check and try again.");
                     return;
                 }
                 
