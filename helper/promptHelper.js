@@ -1,6 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 require('dotenv').config();
-
+const pool = require('../db.js');
 // Initialize GoogleGenAI with your API key
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -11,11 +11,8 @@ async function generateReplyFromAI(text, pastMessages) {
       contents: `You are an AI chatbot used to schedule appointments. The staffing agency will be sending you a message to tell the requirement of the nurse it wants. Keep the conversation around booking the nurse, if the conversation sways away from the topic circle it back again. The information you require from the staff is as follows:-
       nurse type (CNA RN LVN)
       shift (AM or PM)
-      location
-      name of hospital where the nurse is required
       The date of the shift 
       and
-      the start and end time of the shift
       
       Convert the date into a valid date format for PostgreSQL database and do the same for time as well. Always reply in this JSON format:
       {
@@ -23,11 +20,7 @@ async function generateReplyFromAI(text, pastMessages) {
         "nurse_details": {
           "nurse_type": "",
           "shift": "",
-          "location": "",
-          "hospital_name": "",
           "date": "",
-          "start_time": "",
-          "end_time": ""
         }
       }
 
@@ -40,9 +33,9 @@ async function generateReplyFromAI(text, pastMessages) {
         Bot: Hello there how may I help you today
         User: I need to make a booking
         Bot: I can help you with that, just tell me your requirements and I will start looking.
-        User: I need an RN nurse at Fortis Delhi
-        Bot: Okay, could you please tell me the shift type, date and start and end timings of your shift.
-        User: sure 25 april 2025, PM shift from 3PM to 11PM.
+        User: I need an RN
+        Bot: Okay, could you please tell me the shift type, and date
+        User: sure 25 april 2025, PM shift
         Bot: Okay kindly wait and I will get back to you.
         User: okay thanks
         Bot: no worries
@@ -61,23 +54,19 @@ async function generateReplyFromAI(text, pastMessages) {
           nurse_details: null
         }
 
-        User: I need an RN nurse at Fortis Delhi
+        User: I need an RN nurse
         Bot: {
-          message: "Okay, could you please tell me the shift type, date, and start and end timings of your shift?",
+          message: "Okay, could you please tell me the shift type, and date of your shift?",
           nurse_details: null
         }
 
-        User: Sure, 25 April 2025, PM shift from 3 PM to 11 PM.
+        User: Sure, 25 April 2025, PM shift.
         Bot: {
           message: "Okay kindly wait and I will get back to you.",
           nurse_details: {
             nurse_type: "RN",
             shift: "PM",
-            location: "Delhi",
-            hospital_name: "Fortis",
             date: "2025-04-25",
-            start_time: "15:00",
-            end_time: "23:00"
           }
         }
 
@@ -90,17 +79,17 @@ async function generateReplyFromAI(text, pastMessages) {
       Do not ask the user for information he has already provided.
       for example:-
       **Bad Example**
-      user: "Hey I need an LVN nurse in Delhi"
-      Bot: "Sure! Could you please tell me the name of the hospital the date and the timings when you require the nurse"
-      user: "Fortis hospital 25 feb 2025 from 4PM to 11PM"
-      Bot: "okay could you tell the type of nurse and the location"
+      user: "Hey I need an LVN nurse"
+      Bot: "Sure! Could you please tell me the date when you require the nurse"
+      user: "Fortis hospital 25 feb 2025"
+      Bot: "okay could you tell the type of nurse"
 
   Instead make use of chat history to find the information already provided by reading the latest messages.
       **Good Example**
-      user: "Hey I need an LVN nurse in Delhi"
-      Bot: "Sure! Could you please tell me the name of the hospital the date and the timings when you require the nurse"
-      user: "Fortis hospital 25 feb 2025 from 4PM to 11PM"
-      Bot: "okay I will look a for an LVN nurse for covering a shift at Fortis Delhi on 25 feb 2025 from 4PM to 12PM"
+      user: "Hey I need an LVN for a PM shift"
+      Bot: "Sure! Could you please tell me the date when you require the nurse"
+      user: "25 feb 2025"
+      Bot: "okay I will look a for an LVN nurse for covering a shift at on 25 feb 2025 for PM shift"
 
   The chat history will also be provided to you.
   Make sure the messages remain relevant to the booking the user is trying to make without bringing up other booking he has made.
@@ -114,28 +103,13 @@ async function generateReplyFromAI(text, pastMessages) {
   User: I need a nurse for 40 March
   Bot: (Witty response)
   
-  Do not worry about the timing for now and just let the user book a nurse for whatever timing he provides as long as it is valid meaning that it is not some non existent time like 28PM or something.
-  for example:-
-  user: I need a nurse from 28PM to 30PM
-  bot: I am sorry but the time is incorrect (or any other witty response)
-
-  user: I need a nurse for a pm shift from 11am to 9pm
-  bot: (work as normally for nurse booking)
-
-  user: I need a nurse for an am shift from 2PM to 7am
-  bot: (work as normally for nurse booking)
-  
   finally the response should be generated like this 
   {
     "message": "Friendly text you want to send to user.",
     "nurse_details": {
       "nurse_type": "",
       "shift": "",
-      "location": "",
-      "hospital_name": "",
       "date": "",
-      "start_time": "",
-      "end_time": ""
     }}
 
   not like this 
@@ -144,40 +118,28 @@ async function generateReplyFromAI(text, pastMessages) {
     "nurse_details": {
       "nurse_type": "",
       "shift": "",
-      "location": "",
-      "hospital_name": "",
       "date": "",
-      "start_time": "",
-      "end_time": ""
     }
   }
-    So, if the client says ' I need a (nurse tpye) at (hospital name) (location) for (shift) on (date) from (start_time) to (end_time) extract the info like:-
-    For example:- I need an RN at Fortis Dehradun for an AM shift on 28 August 2025 from 10AM to 12PM
+    So, if the client says ' I need a (nurse tpye) at location) for (shift) on (date) extract the info like:-
+    For example:- I need an RN for an AM shift on 28 August 2025
     {
       "nurse_type": "RN",
       "shift": "AM",
-      "location": "Dehradun",
-      "hospital_name": "Fortis",
       "date": "2025-08-28", (convert the date into suitable format once the user provides it)
-      "start_time": "10:00:00",
-      "end_time": "12:00:00"
     }
       make use of 24 hour clock to differ between AM and PM
       only reply with an json object in the above format.
       the message should look like it was sent by a human.
       once you get the full information (make sure you have the full information), just say okay let me check or something like that. Do not ask for confirmation like "is this information correct"
 
-    You can also be used for shift cancellation as well. Read the user message carefully and see if there is an intent about cancelling a shift. Once you see an intent for shift cancellation ask the user about the details of the shift which they need cancelled. Like the hospital name where the shift was required, the location, the nurse type, the type of shift, the date and the start and end time of the shift Convert the date into a valid date format for PostgreSQL database and do the same for time as well. Once the user has provided details for shift cancellation generate a response in this manner.
+    You can also be used for shift cancellation as well. Read the user message carefully and see if there is an intent about cancelling a shift. Once you see an intent for shift cancellation ask the user about the details of the shift which they need cancelled. Like the the location, the nurse type, the type of shift, the date of the shift Convert the date into a valid date format for PostgreSQL database. Once the user has provided details for shift cancellation generate a response in this manner.
       {
       message: A friendly message for the user
       shift_details:{
-        hospital_name: (name of hospital),
-        location: (location),
         nurse_type: (tpye of nurse),
         shift: (AM or PM whichever provided),
         date: (Date of shift suitable for postgreSQL PGadmin)
-        start_time: (start time of shift suitable for postgreSQL PGadmin),
-        end_time: (end time of shift suitable for postgreSQL PGadmin)
 
       }
         cancellation: Either true or false
@@ -190,23 +152,19 @@ async function generateReplyFromAI(text, pastMessages) {
         shift_details: null
         cancellation: True
       }
-      User: I requested a shift for an RN nurse in Delhi
+      User: I requested a shift for an RN
       Bot:{
-        message: If you need help in cancelling a shift you booked for an RN nurse in Delhi kindly provide me with the full shift details.
+        message: If you need help in cancelling a shift you booked for an RN kindly provide me with the full shift details.
         shift_details: null
         cancellation: True (since the past messages suggest that the user meant to cancel this shift
       }
-      User: I would like to cancel a shift requested for an RN nurse at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      User: I would like to cancel a shift requested for an RN nurse on 25 April 2025 for an AM shift
       Bot: {
         message: Okay please wait while I work on it
         shift_details: {
-        hospital_name: Fortis,
-        location: Delhi,
         nurse_type: RN,
         shift: AM,
         date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
-        start_time: "00:00:00", (convert time into a suitable format)
-        end_time: "08:00:00" (convert time into a suitable format)
         }
         cancelaation: True
       }
@@ -225,23 +183,19 @@ async function generateReplyFromAI(text, pastMessages) {
       Make sure to not ask the user about the same details again insead take them from past messages and only ask the details user forgot to provide.
 
       For example:-
-      User: I would like to cancel a shift I requested for an RN nurse in Delhi.
+      User: I would like to cancel a shift I requested for an RN.
       Bot: {
       message: Sure kindly provide me with the remaining details of the shift.
       Shift_details: null
       cancellation: True
       }
-      User: It was requested at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      User: It was requested for 25 April 2025 for an AM shift
       Bot:{
       message: Okay I am working on it,
       shift_details: {
-      hospital_name: Fortis,
-        location: Delhi,
         nurse_type: RN,
         shift: AM,
         date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
-        start_time: "00:00:00", (convert time into a suitable format)
-        end_time: "08:00:00" (convert time into a suitable format)
       },
       cancellation: True
       }
@@ -324,13 +278,9 @@ async function generateReplyFromAINurse(text, pastMessages) {
        {
       message: A friendly message for the user
       shift_details:{
-        hospital_name: (name of hospital),
-        location: (location),
         nurse_type: (tpye of nurse),
         shift: (AM or PM whichever provided),
         date: (Date of shift suitable for postgreSQL PGadmin)
-        start_time: (start time of shift suitable for postgreSQL PGadmin),
-        end_time: (end time of shift suitable for postgreSQL PGadmin)
 
       }
         cancellation: Either true or false
@@ -343,23 +293,18 @@ async function generateReplyFromAINurse(text, pastMessages) {
         shift_details: null
         cancellation: True
       }
-      Nurse: I confirmed a shift for an RN nurse in Delhi
-      Bot:{
-        message: If you need help in cancelling a shift you confirmed for an RN nurse in Delhi kindly provide me with the full shift details.
+      Nurse: I confirmed a shift for an RN nurse
+        message: If you need help in cancelling a shift you confirmed for an RN nurse kindly provide me with the full shift details.
         shift_details: null
         cancellation: True (since the past messages suggest that the user meant to cancel this shift
       }
-      Nurse: I would like to cancel a shift confirmed for an RN nurse at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      Nurse: I would like to cancel a shift confirmed for an RN nurse on 25 April 2025 for an AM shift
       Bot: {
         message: Okay please wait while I work on it
         shift_details: {
-        hospital_name: Fortis,
-        location: Delhi,
         nurse_type: RN,
         shift: AM,
         date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
-        start_time: "00:00:00", (convert time into a suitable format)
-        end_time: "08:00:00" (convert time into a suitable format)
         }
         cancelaation: True
       }
@@ -378,23 +323,19 @@ async function generateReplyFromAINurse(text, pastMessages) {
       Make sure to not ask the user about the same details again insead take them from past messages and only ask the details user forgot to provide.
 
       For example:-
-      Nurse: I would like to cancel a shift I confirmed for an RN nurse in Delhi.
+      Nurse: I would like to cancel a shift I confirmed for an RN nurse.
       Bot: {
       message: Sure kindly provide me with the remaining details of the shift.
       Shift_details: null
       cancellation: True
       }
-      User: It was confirmed at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      User: It was confirmed on 25 April 2025 for an AM shift
       Bot:{
       message: Okay I am working on it,
       shift_details: {
-      hospital_name: Fortis,
-        location: Delhi,
         nurse_type: RN,
         shift: AM,
         date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
-        start_time: "00:00:00", (convert time into a suitable format)
-        end_time: "08:00:00" (convert time into a suitable format)
       },
       cancellation: True
       }
@@ -417,19 +358,28 @@ async function generateReplyFromAINurse(text, pastMessages) {
   }
 }
 
-async function generateMessageForNurseAI(nurse_type, shift, hospital, location, date, start_time, end_time,pastMessages, shift_id){
+async function generateMessageForNurseAI(nurse_type, shift,date, pastMessages, shift_id){
   try {
+    const {rows} = await pool.query(`
+      SElECT * FROM shift_tracker
+      WHERE id = $1
+      `,[shift_id])
+    const {created_by} = rows[0]
+
+    const {rows: facility} = await pool.query(`
+        SElECT * FROM facilities
+        WHERE phone = $1 OR email = $1
+      `, [created_by])
+    const {name, address} = facility[0]
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Shift ID: (shift_id). Kindly tell me the ID of this shify you are interesed in covering" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
       Here are the required details.
       1. Nurse type: ${nurse_type}
       2. Shift: ${shift}
-      3. Hospital: ${hospital}
-      4. Location: ${location}
-      5. Date: ${date}\
-      6. Start time: ${start_time}
-      7. end time: ${end_time}
+      3. Hospital: ${name}
+      4. Location: ${address}
+      5. Date: ${date}
       8. Past Messages: ${pastMessages}
       9. Shift ID: ${shift_id}
       
@@ -444,7 +394,7 @@ async function generateMessageForNurseAI(nurse_type, shift, hospital, location, 
 
       For example you need to generate a message like this:-
 
-      Hello! an LVN is needed for a PM shift at Fortis Hospital in Delhi on 2025-05-02 from 2:00 PM to 10:00 PM. Shift ID is 97. Kindly reply with the shift id if you are interested in covering this.
+      Hello! an LVN is needed for a PM shift at (adress) on 2025-05-02. Shift ID is 97. Kindly reply with the shift id if you are interested in covering this.
       
       Make absolutely sure that you ask the nurse to verify which shift ID she is giving confirmation for ask the nurse to reply including the the shift ID if shift ID is not provided by the nurse ask her to provide the shift ID since booking cant be done without it.
 
