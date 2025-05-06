@@ -46,7 +46,6 @@ async function send_nurses_message(nurses, nurse_type, shift, shift_id, date) {
 
     const phoneNumber = nurse.mobile_number;
     const nurse_availability = await check_nurse_availability(nurse.id, shift_id);
-    console.log("nurse availability", nurse_availability)
     if (nurse_availability) {
       const pastMessages = await get_nurse_chat_data(phoneNumber)
       let message = await generateMessageForNurseAI(nurse_type, shift, date,pastMessages,shift_id)

@@ -18,7 +18,6 @@ router.post('/chat_nurse', async (req, res) => {
     try { 
         const pastMessages = await get_nurse_chat_data(sender)
         let replyMessage = await generateReplyFromAINurse(text,pastMessages);
-        console.log('reply from ai', replyMessage)
         if (typeof replyMessage === 'string') {
             replyMessage = replyMessage.trim();
             if (replyMessage.startsWith('```json')) {

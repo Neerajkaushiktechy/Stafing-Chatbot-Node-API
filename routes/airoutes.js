@@ -12,7 +12,6 @@ router.post('/chat', async (req, res) => {
     const pastMessages = await get_coordinator_chat_data(sender)
     try {
         let replyMessage = await generateReplyFromAI(text,pastMessages);
-        console.log('reply from ai', replyMessage)
         // Check if replyMessage is a string and starts with ```json
         if (typeof replyMessage === 'string') {
             replyMessage = replyMessage.trim();
@@ -28,7 +27,6 @@ router.post('/chat', async (req, res) => {
                 return res.status(500).json({ message: "Invalid AI response format." });
             }
         }
-        console.log('reply from ai', replyMessage)
         res.json({ message: replyMessage.message });
         if (replyMessage.nurse_details) {
             const nurseDetailsArray = Array.isArray(replyMessage.nurse_details) ? replyMessage.nurse_details : [replyMessage.nurse_details];
@@ -44,7 +42,6 @@ router.post('/chat', async (req, res) => {
               const shift_id = await create_shift(sender, nurse_type, shift, date);
           
               const nurses = await search_nurses(nurse_type, shift, shift_id);
-              console.log('nurses', nurses)
               await send_nurses_message(nurses, nurse_type, shift, shift_id, date);
             }
           }

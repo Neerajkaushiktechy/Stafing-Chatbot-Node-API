@@ -535,16 +535,12 @@ async function get_shifts(req, res) {
   
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
     const query = `SELECT * FROM shift_tracker ${whereClause} ORDER BY date, shift`;
-    console.log("Query:", query);
-    console.log("Values:", values);
     try {
       const result = await pool.query(query, values);
-      console.log("Result:", result.rows);
       const events = [];
   
       for (const row of result.rows) {
         const { created_by, nurse_type, shift: shiftValue, date } = row;
-        console.log("nurse ID:", row.nurse_id)
         const {rows: nurse} = await pool.query(`
             SELECT first_name, last_name FROM nurses
             where id = $1`,
@@ -563,15 +559,12 @@ async function get_shifts(req, res) {
         if (!facilityRows.length) continue;
   
         const facility_id = facilityRows[0].id;
-        console.log("Facility ID:", facility_id);
-        console.log("Nurse Type:", nurse_type);
         // Get shift timings
         const { rows: shiftRows } = await pool.query(
           `SELECT * FROM shifts WHERE facility_id = $1 AND role ILIKE $2 `,
           [facility_id, nurse_type]
         );
         if (!shiftRows.length) continue;
-        console.log("Shift Rows:", shiftRows);
         const {
           am_time_start, am_time_end,
           pm_time_start, pm_time_end,

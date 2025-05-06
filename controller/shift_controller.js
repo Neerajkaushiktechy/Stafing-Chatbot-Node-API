@@ -175,7 +175,6 @@ async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
 
     // 🔹 Fetch nurses and exclude sender
     let nurses = await search_nurses(nurse_type, shift, shift_id);
-    console.log("NURSES", nurses)
     nurses = nurses.filter(nurse => nurse.mobile_number !== phoneNumber);
 
     // 🔹 Message to other nurses
@@ -202,7 +201,6 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     await sendMessage(nursePhoneNumber, message);
     return false;
   }
-  console.log("SHIFT QUERY", shiftQuery.rows[0])
   const { shift, location, nurse_type: type } = shiftQuery.rows[0];
 
   const nurseQuery = await pool.query(`
