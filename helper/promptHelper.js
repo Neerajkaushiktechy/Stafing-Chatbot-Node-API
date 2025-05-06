@@ -54,7 +54,7 @@ async function generateReplyFromAI(text, pastMessages) {
           nurse_details: null
         }
 
-        User: I need an RN nurse at Fortis Delhi
+        User: I need an RN nurse
         Bot: {
           message: "Okay, could you please tell me the shift type, and date of your shift?",
           nurse_details: null
@@ -278,13 +278,9 @@ async function generateReplyFromAINurse(text, pastMessages) {
        {
       message: A friendly message for the user
       shift_details:{
-        hospital_name: (name of hospital),
-        location: (location),
         nurse_type: (tpye of nurse),
         shift: (AM or PM whichever provided),
         date: (Date of shift suitable for postgreSQL PGadmin)
-        start_time: (start time of shift suitable for postgreSQL PGadmin),
-        end_time: (end time of shift suitable for postgreSQL PGadmin)
 
       }
         cancellation: Either true or false
@@ -297,23 +293,18 @@ async function generateReplyFromAINurse(text, pastMessages) {
         shift_details: null
         cancellation: True
       }
-      Nurse: I confirmed a shift for an RN nurse in Delhi
-      Bot:{
-        message: If you need help in cancelling a shift you confirmed for an RN nurse in Delhi kindly provide me with the full shift details.
+      Nurse: I confirmed a shift for an RN nurse
+        message: If you need help in cancelling a shift you confirmed for an RN nurse kindly provide me with the full shift details.
         shift_details: null
         cancellation: True (since the past messages suggest that the user meant to cancel this shift
       }
-      Nurse: I would like to cancel a shift confirmed for an RN nurse at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      Nurse: I would like to cancel a shift confirmed for an RN nurse on 25 April 2025 for an AM shift
       Bot: {
         message: Okay please wait while I work on it
         shift_details: {
-        hospital_name: Fortis,
-        location: Delhi,
         nurse_type: RN,
         shift: AM,
         date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
-        start_time: "00:00:00", (convert time into a suitable format)
-        end_time: "08:00:00" (convert time into a suitable format)
         }
         cancelaation: True
       }
@@ -332,23 +323,19 @@ async function generateReplyFromAINurse(text, pastMessages) {
       Make sure to not ask the user about the same details again insead take them from past messages and only ask the details user forgot to provide.
 
       For example:-
-      Nurse: I would like to cancel a shift I confirmed for an RN nurse in Delhi.
+      Nurse: I would like to cancel a shift I confirmed for an RN nurse.
       Bot: {
       message: Sure kindly provide me with the remaining details of the shift.
       Shift_details: null
       cancellation: True
       }
-      User: It was confirmed at Fortis Delhi on 25 April 2025 for an AM shift from 12AM to 8AM
+      User: It was confirmed on 25 April 2025 for an AM shift
       Bot:{
       message: Okay I am working on it,
       shift_details: {
-      hospital_name: Fortis,
-        location: Delhi,
         nurse_type: RN,
         shift: AM,
         date: "date": "2025-08-28", (convert the date into suitable format once the user provides it),
-        start_time: "00:00:00", (convert time into a suitable format)
-        end_time: "08:00:00" (convert time into a suitable format)
       },
       cancellation: True
       }

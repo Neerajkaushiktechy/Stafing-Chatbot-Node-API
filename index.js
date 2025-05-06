@@ -1,11 +1,11 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const nurseRoutes = require('./routes/nurseRoutes.js');
 const aiRoutes = require('./routes/airoutes.js');
 const adminRoutes = require('./routes/adminRoute.js')
 const app = express();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const createTables = require('./initDB.js');
 require('dotenv').config();
 const port = process.env.PORT || 3000;
 // Middleware
@@ -22,7 +22,7 @@ const corsOptions = {
 // Enable CORS with the specified options
 app.use(cors(corsOptions));
 
-
+createTables();
 app.use('/api', nurseRoutes);
 app.use('/api',aiRoutes);
 app.use('/api/admin',adminRoutes)

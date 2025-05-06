@@ -27,7 +27,7 @@ router.post('/chat', async (req, res) => {
                 return res.status(500).json({ message: "Invalid AI response format." });
             }
         }
-        console.log('reply from ai', replyMessage.message)
+        console.log('reply from ai', replyMessage)
         res.json({ message: replyMessage.message });
         if (replyMessage.nurse_details) {
             const nurseDetailsArray = Array.isArray(replyMessage.nurse_details) ? replyMessage.nurse_details : [replyMessage.nurse_details];
@@ -39,15 +39,15 @@ router.post('/chat', async (req, res) => {
           
               const nurses = await search_nurses(nurse_type, shift, shift_id);
               console.log('nurses', nurses)
-              await send_nurses_message(nurses, nurse_type, shift, shift_id, sender, date);
+              await send_nurses_message(nurses, nurse_type, shift, shift_id, date);
             }
           }
 
         if (replyMessage.shift_details && replyMessage.cancellation){
             const shiftDetailsArray = Array.isArray(replyMessage.shift_details) ? replyMessage.shift_details : [replyMessage.shift_details];
             for (const shiftDetail of shiftDetailsArray) {
-              const { nurse_type, shift, location, hospital_name, date, start_time, end_time } = shiftDetail;
-                await search_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender)
+              const { nurse_type, shift, date } = shiftDetail;
+                await search_shift(nurse_type, shift, date, sender)
             }
         }
 

@@ -41,7 +41,7 @@ async function search_nurses(nurse_type, shift, shift_id) {
 }
 
 
-async function send_nurses_message(nurses, nurse_type, shift, shift_id, sender, date) {
+async function send_nurses_message(nurses, nurse_type, shift, shift_id, date) {
   for (const nurse of nurses) {
 
     const phoneNumber = nurse.mobile_number;

@@ -57,8 +57,8 @@ router.post('/chat_nurse', async (req, res) => {
         if (replyMessage.shift_details && replyMessage.cancellation){
             const shiftDetailsArray = Array.isArray(replyMessage.shift_details) ? replyMessage.shift_details : [replyMessage.shift_details];
             for (const shiftDetail of shiftDetailsArray) {
-              const { nurse_type, shift, location, hospital_name, date, start_time, end_time } = shiftDetail;
-              await shift_cancellation_nurse(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender)
+              const { nurse_type, shift,date} = shiftDetail;
+              await shift_cancellation_nurse(nurse_type, shift,date,sender)
             }
         }
         

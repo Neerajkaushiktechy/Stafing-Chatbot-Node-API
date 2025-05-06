@@ -42,18 +42,14 @@ async function check_shift_status(shift_id, phoneNumber) {
   }
 }
 
-async function search_shift(nurse_type, shift, location, hospital_name, date, start_time, end_time, created_by) {
+async function search_shift(nurse_type, shift,date,created_by) {
   const { rows } = await pool.query(`
     SELECT * FROM shift_tracker
     WHERE nurse_type ILIKE $1
       AND shift ILIKE $2
-      AND location ILIKE $3
-      AND hospital_name ILIKE $4
-      AND date = $5
-      AND start_time = $6
-      AND end_time = $7
-      AND created_by = $8
-  `, [nurse_type, shift, location, hospital_name, date, start_time, end_time, created_by]);
+      AND date = $3
+      AND created_by = $4
+  `, [nurse_type, shift,date, created_by]);
 
   if (rows.length > 0 ) {
       if (rows.length === 1){
@@ -61,12 +57,10 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
         const nurse_id = rows[0].nurse_id;
         const nurse_type = rows[0].nurse_type;
         const shift_value = rows[0].shift;
-        const hospital_name = rows[0].hospital_name;
         const location = rows[0].location;
         const date = rows[0].date;
-        const start_time = rows[0].start_time;
-        const end_time = rows[0].end_time;
-        await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time);
+        const name = rows[0].name;
+        await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,location,date, name);
       }
       else if (rows.length > 1) {
         let message = `We found multiple shifts matching your request:\n\n`;
@@ -89,7 +83,7 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
             }
           }
       
-          message += `${i + 1}. ${shift.nurse_type} nurse (${nurse_name}) at ${shift.hospital_name}, ${shift.location} on ${shift.date} from ${shift.start_time} to ${shift.end_time}\n ID:${shift.id}\n`;
+          message += `${i + 1}. ${shift.nurse_type} nurse (${nurse_name}) at ${shift.name}, ${shift.location} on ${shift.date}\n ID:${shift.id}\n`;
         }
       
         message += `\nPlease reply with the number of the shift you'd like to cancel.`;
@@ -98,15 +92,15 @@ async function search_shift(nurse_type, shift, location, hospital_name, date, st
       }
       
   } else {
-    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} does not exist or has been deleted already`
+    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift scheduled on ${date}`
     await sendMessage(created_by,message)
   }
 }
 
-async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time) {
+async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,location,date,name) {
   try {
     await pool.query(`DELETE FROM shift_tracker WHERE id = $1`, [shift_id]);
-    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift_value} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} has been cancelled succesfully`
+    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift_value} at ${location} scheduled on ${date} has been cancelled succesfully`
     await sendMessage(created_by,message)
         
        if (nurse_id){
@@ -117,7 +111,7 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
             `, [nurse_id]
           )
           const nurse_phoneNumber = rows[0].mobile_number
-          const message = `The shift you confirmed at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} has been cancelled by the coordinator. We are sorry for any inconvinience caused`
+          const message = `The shift you confirmed scheduled on ${date} at ${name},${location} has been cancelled by the coordinator. We are sorry for any inconvinience caused`
           await sendMessage(nurse_phoneNumber,message)
        }
      
@@ -136,51 +130,35 @@ async function search_shift_by_id(shift_id, created_by){
     const nurse_id = rows[0].nurse_id;
     const nurse_type = rows[0].nurse_type;
     const shift_value = rows[0].shift;
-    const hospital_name = rows[0].hospital_name;
+    const name = rows[0].name;
     const location = rows[0].location;
     const date = rows[0].date;
-    const start_time = rows[0].start_time;
-    const end_time = rows[0].end_time;
-    await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,hospital_name,location,date,start_time,end_time);
+    await delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,location,date,name);
 }
-async function shift_cancellation_nurse(nurse_type, shift, location, hospital_name, date, start_time, end_time, sender) {
+async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
   try {
-    // 🔹 Improvement: Destructuring first row directly if found
+    const {rows: nurse} = await pool.query(`
+      SELECT * FROM nurses
+      WHERE mobile_number = $1`,
+      [phoneNumber])
+    const {id: nurse_id} = nurse[0]
     const { rows } = await pool.query(`
       SELECT * FROM shift_tracker
       WHERE nurse_type ILIKE $1
         AND shift ILIKE $2
-        AND location ILIKE $3
-        AND hospital_name ILIKE $4
-        AND date = $5
-        AND start_time = $6
-        AND end_time = $7
-    `, [nurse_type, shift, location, hospital_name, date, start_time, end_time]);
+        AND date = $3
+        AND nurse_id = $4
+    `, [nurse_type, shift, date, nurse_id]);
 
     if (rows.length === 0) {
       // 🔹 Improvement: Early return to avoid nesting
-      const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift at ${hospital_name}, ${location} scheduled on ${date} from ${start_time} to ${end_time} does not exist or has been deleted already.`;
+      const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift scheduled on ${date} does not exist or has been deleted already.`;
       await sendMessage(sender, message);
       return;
     }
 
-    const shiftDetails = rows[0]; // use a cleaner variable name
-    const { id: shift_id, nurse_id, created_by } = shiftDetails;
-
-    // 🔹 Improvement: Get nurse number and check match
-    const nurse_number_result = await pool.query(`
-      SELECT mobile_number FROM nurses WHERE id = $1
-    `, [nurse_id]);
-
-    if (nurse_number_result.rows.length === 0) return;
-
-    const fetched_number = nurse_number_result.rows[0].mobile_number;
-
-    if (fetched_number !== sender) {
-      const message = `The shift you are trying to cancel is not assigned to you or does not exist.`;
-      await sendMessage(sender, message);
-      return;
-    } // 🔹 Early exit if sender is not the assigned nurse
+    const shiftDetails = rows[0];
+    const { id: shift_id, created_by, name, location } = shiftDetails;
 
     // 🔹 Update shift status
     await pool.query(`
@@ -192,7 +170,7 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
     
 
     // 🔹 Message to nurse
-    const messageToNurse = `The shift you confirmed at ${hospital_name}, ${location}, on ${date} from ${start_time} to ${end_time} for ${nurse_type} has been cancelled.`;
+    const messageToNurse = `The shift you confirmed at ${name}, ${location} on ${date} for ${nurse_type} has been cancelled.`;
     await sendMessage(sender, messageToNurse)
 
     // 🔹 Fetch nurses and exclude sender
@@ -200,10 +178,10 @@ async function shift_cancellation_nurse(nurse_type, shift, location, hospital_na
     nurses = nurses.filter(nurse => nurse.mobile_number !== sender);
 
     // 🔹 Message to other nurses
-    await send_nurses_message(nurses, nurse_type, shift, location, hospital_name, shift_id, sender, date, start_time, end_time);
+    await send_nurses_message(nurses, nurse_type, shift, shift_id, date);
 
     // 🔹 Notify hospital/requester
-    const messageToCreator = `Hello! Your shift request at ${hospital_name}, ${location}, on ${date} from ${start_time} to ${end_time} for a ${nurse_type} nurse has been cancelled by the nurse. We are looking for another to help cover it. Sorry for any inconvenience caused.`;
+    const messageToCreator = `Hello! Your shift request at ${name}, ${location}, on ${date} for a ${nurse_type} nurse has been cancelled by the nurse. We are looking for another to help cover it. Sorry for any inconvenience caused.`;
     await sendMessage(created_by, messageToCreator);
 
   } catch (error) {
