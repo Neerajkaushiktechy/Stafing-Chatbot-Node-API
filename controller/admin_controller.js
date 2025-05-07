@@ -3,38 +3,43 @@ const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const router = require('../routes/nurseRoutes');
 const pool = require('../db');
-async function admin_login(req,res){
+async function admin_login(req, res) {
     try {
-        const {email, password} = req.body
+        const { email, password } = req.body;
         const result = await pool.query(`
             SELECT * FROM admin
             WHERE email = $1
-            `,[email])
-        if (result.rows.length == 0){
-            return res.json({message: "Invalid Credentials",
-                                        status: 404
-            })
+        `, [email]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Invalid Credentials", status: 404 });
         }
-        const user = result.rows[0]
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const password_check = await bcrypt.compare(password, user.password)
-        if (!password_check){
-            return res.json({message:"Invalid Credentials",
-                                        status:404
-            })
+
+        const user = result.rows[0];
+        const password_check = await bcrypt.compare(password, user.password);
+        if (!password_check) {
+            return res.status(404).json({ message: "Invalid Credentials", status: 404 });
         }
+
         const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '1d' });
+
+        // Set the token in an HTTP-only cookie
         res.cookie('auth_token', token, {
             httpOnly: true,  // Makes the cookie inaccessible to JavaScript
             sameSite: 'Strict', // Prevents CSRF attacks
-            maxAge: 24 * 60 * 60 * 1000 // Token expiration time (1 hour)
+            maxAge: 24 * 60 * 60 * 1000 // Token expiration time (1 day)
         });
-        res.status(200).json({ message: "Login successful", 
-                                user: { id: user.id, email: user.email },
-                                status:200 });
+
+        // Include the token in the response for frontend storage (if needed)
+        res.status(200).json({
+            message: "Login successful",
+            user: { id: user.id, email: user.email },
+            token, // Include the token in the response
+            status: 200
+        });
     } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ message: "Server error" });
+        console.error(error.message);
+        res.status(500).json({ message: "Server error" });
     }
 }
 
