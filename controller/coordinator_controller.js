@@ -12,8 +12,8 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
 
     if (nurse && shiftInfo) {
         const message = `Hello! Your shift requested at ${shiftInfo.name}, ${shiftInfo.location}, on ${shiftInfo.date} for ${shiftInfo.shift} shift has been filled. This shift will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
-
-        await sendMessage(recipient, message);
+        await sendMessage(recipient.coordinator_phone, message);
+        await sendMessage(recipient.coordinator_email, message);
     } else {
         console.error("Missing nurse or shift information. Cannot send message.");
     }
@@ -52,13 +52,26 @@ async function update_shift_status(shift_id, nurse_id) {
 async function get_coordinator_number(shift_id) {
     try {
         const { rows } = await pool.query(`
-            SELECT created_by 
+            SELECT coordinator_id 
             FROM shift_tracker
             WHERE id = $1
         `, [shift_id]);
-        
-        const recipient = rows.length > 0 ? rows[0].created_by : null;
-        return recipient;
+        const coordinator_id = rows[0].coordinator_id;
+        const { rows: coordinator } = await pool.query(`
+            SELECT coordinator_phone, coordinator_email
+            FROM coordinator
+            WHERE id = $1
+        `, [coordinator_id]);
+        const coordinator_phone = coordinator[0].coordinator_phone;
+        const coordinator_email = coordinator[0].coordinator_email;
+        if (coordinator_phone && coordinator_email) {
+            return {
+              coordinator_phone,
+              coordinator_email
+            };
+          } else {
+            return null; // or undefined, or handle it however you need
+          }
     } catch (error) {
         console.error("Error fetching coordinator number:", error);
     }
@@ -66,13 +79,25 @@ async function get_coordinator_number(shift_id) {
 
 async function get_shift_information(shift_id) {
     try {
+        const { rows: facility } = await pool.query(`
+            SELECT city_state_zip, name
+            FROM facilities
+            WHERE id = (SELECT facility_id FROM shift_tracker WHERE id = $1)
+        `, [shift_id]);
+        const location = facility[0]?.city_state_zip || '';
+        const name = facility[0]?.name || '';
         const { rows } = await pool.query(`
-            SELECT location, date, shift, name
+            SELECT date, shift
             FROM shift_tracker
             WHERE id = $1
         `, [shift_id]);
 
-        const shiftInfo = rows.length > 0 ? rows[0] : null;
+        const shiftInfo = {
+            date: rows[0].date,
+            shift: rows[0].shift,
+            location: location,
+            name: name
+        };
         return shiftInfo;
     } catch (error) {
         console.error("Error fetching shift information:", error);
@@ -105,8 +130,14 @@ async function get_coordinator_chat_data(sender){
 }
 
 async function validate_shift_before_cancellation(shift_id, phoneNumber) {
+    const {rows: coordinator} = await pool.query(`
+        SELECT facility_id
+        FROM coordinator
+        WHERE coordinator_phone = $1 OR coordinator_email = $1
+    `, [phoneNumber]);
+    const facility_id_coordinator = coordinator[0].facility_id;
     const result = await pool.query(`
-      SELECT created_by
+      SELECT facility_id
       FROM shift_tracker
       WHERE id = $1
     `, [shift_id]);
@@ -117,9 +148,9 @@ async function validate_shift_before_cancellation(shift_id, phoneNumber) {
       return false;
     }
   
-    const { created_by } = result.rows[0];
+    const { facility_id } = result.rows[0];
   
-    if (created_by !== phoneNumber) {
+    if (facility_id !== facility_id_coordinator) {
       const message = `The shift with ID ${shift_id} does not belong to your account. Please check and try again.`;
       await sendMessage(phoneNumber,message)
       return false;
@@ -138,11 +169,11 @@ async function check_nurse_type(sender,nurse_type) {
         return false;
     }
     const facility = await pool.query(`
-        SELECT id
-        FROM facilities 
-        WHERE phone = $1 OR email = $1
+        SELECT facility_id
+        FROM coordinator 
+        WHERE coordinator_phone = $1 OR coordinator_email = $1
         `, [sender]);
-    const facility_id = facility.rows[0].id;
+    const facility_id = facility.rows[0].facility_id;
     const result = await pool.query(`
         SELECT * 
         FROM shifts 
