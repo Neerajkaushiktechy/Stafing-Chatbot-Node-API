@@ -18,6 +18,7 @@ const createTables = async () => {
                 phone TEXT NOT NULL UNIQUE,
                 overtime_multiplier NUMERIC,
                 email VARCHAR(255) NOT NULL UNIQUE
+
             );
         `);
         
@@ -27,7 +28,7 @@ const createTables = async () => {
                 sender VARCHAR(100) NOT NULL,
                 message TEXT,
                 message_type TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (sender) REFERENCES facilities(phone) ON DELETE CASCADE
             );
         `);
@@ -37,15 +38,15 @@ const createTables = async () => {
                 first_name VARCHAR(255) NOT NULL,
                 last_name VARCHAR(255) NOT NULL,
                 location VARCHAR(100) NOT NULL,
-                nurse_type VARCHAR(50) NOT NULL,
-                shift VARCHAR(50) NOT NULL,
-                mobile_number VARCHAR(50) NOT NULL UNIQUE,
-                schedule_name VARCHAR(50) NOT NULL,
+                nurse_type VARCHAR(255) NOT NULL,
+                shift VARCHAR(255) NOT NULL,
+                mobile_number VARCHAR(100) NOT NULL UNIQUE,
+                schedule_name VARCHAR(255) NOT NULL,
                 rate NUMERIC NOT NULL,
                 shift_dif NUMERIC NOT NULL,
                 ot_rate NUMERIC NOT NULL,
-                email VARCHAR(100) NOT NULL UNIQUE,
-                talent_id VARCHAR(50) NOT NULL UNIQUE
+                email VARCHAR(255) NOT NULL UNIQUE,
+                talent_id VARCHAR(255) NOT NULL UNIQUE
             );
         `);
         
@@ -55,7 +56,7 @@ const createTables = async () => {
                 mobile_number VARCHAR(100) NOT NULL,
                 message TEXT,
                 message_type TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                timestamp TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (mobile_number) REFERENCES nurses(mobile_number) ON DELETE CASCADE
             );
         `);
@@ -78,14 +79,14 @@ const createTables = async () => {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS shift_tracker (
                 id SERIAL PRIMARY KEY,
-                created_by VARCHAR(100) NOT NULL,
-                name text NOT NULL,
-                location text NOT NULL,
+                facility_id INTEGER NOT NULL,
                 nurse_type VARCHAR(255) NOT NULL,
-                shift VARCHAR(50) NOT NULL,
-                nurse_id VARCHAR(50),
-                status VARCHAR(50) NOT NULL,
-                date DATE NOT NULL
+                shift VARCHAR(525) NOT NULL,
+                nurse_id INTEGER,
+                status VARCHAR(255) NOT NULL,
+                date DATE NOT NULL,
+                FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE CASCADE,
+                FOREIGN KEY (coordinator_id) REFERENCES coordinator(id) ON DELETE CASCADE
             )`)
         
         await pool.query(`
@@ -108,7 +109,18 @@ const createTables = async () => {
             noc_meal_start TIME WITHOUT TIME ZONE,
             noc_meal_end TIME WITHOUT TIME ZONE
             )`)
-  } catch (err) {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS coordinator (
+            id SERIAL PRIMARY KEY,
+            facility_id INTEGER NOT NULL,
+            coordinator_first_name TEXT NOT NULL,
+            coordinator_last_name TEXT NOT NULL,
+            coordinator_phone TEXT NOT NULL UNIQUE,
+            coordinator_email TEXT NOT NULL UNIQUE,
+            FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE CASCADE
+            )
+        `)
+  } catch (err) { 
     console.error('Error creating tables:', err);
   }
 };

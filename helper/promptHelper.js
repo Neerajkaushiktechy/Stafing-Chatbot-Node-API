@@ -140,11 +140,10 @@ async function generateReplyFromAI(text, pastMessages) {
         nurse_type: (tpye of nurse),
         shift: (AM or PM whichever provided),
         date: (Date of shift suitable for postgreSQL PGadmin)
-
       }
         cancellation: Either true or false
       }
-    Keep the shift details as null until you are given the whole shift details.
+    Keep the shift details as null until you are given the whole shift details. ie. nurse_type, shift, and date
     For example:-
       User: I would like to cancel a shift.
       Bot: {
@@ -364,12 +363,11 @@ async function generateMessageForNurseAI(nurse_type, shift,date, pastMessages, s
       SElECT * FROM shift_tracker
       WHERE id = $1
       `,[shift_id])
-    const {created_by} = rows[0]
-
+    const {facility_id} = rows[0]
     const {rows: facility} = await pool.query(`
         SElECT * FROM facilities
-        WHERE phone = $1 OR email = $1
-      `, [created_by])
+        WHERE id = $1
+      `, [facility_id])
     const {name, address} = facility[0]
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",

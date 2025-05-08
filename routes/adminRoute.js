@@ -19,7 +19,8 @@ const {
     delete_nurse_type,
     edit_nurse_type,
     edit_nurse,
-    get_shifts
+    get_shifts,
+    delete_coordinator
 } = require('../controller/admin_controller');
 const authenticateToken = require('../middleware/authenticateToken');
 
@@ -48,5 +49,6 @@ router.put('/edit-nurse-type/:id', authenticateToken, edit_nurse_type);
 
 router.delete('/delete-service/:id/:role', authenticateToken, delete_service);
 router.get('/get-shifts', authenticateToken, get_shifts);
+router.delete('/delete-coordinator/:id', authenticateToken, delete_coordinator);
 
 module.exports = router;
