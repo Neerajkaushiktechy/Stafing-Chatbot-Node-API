@@ -9,13 +9,12 @@ async function search_nurses(nurse_type, shift, shift_id) {
       WHERE id = $1
     `, [shift_id]);
     
-    const { created_by } = rows[0];
-    
+    const { facility_id } = rows[0];
 
     const { rows: addressRows } = await pool.query(`
       SELECT city_state_zip FROM facilities
-      WHERE phone = $1 OR email = $1
-    `, [created_by]);
+      WHERE id = $1
+    `, [facility_id]);
 
     const full_location = addressRows[0]?.city_state_zip || '';
 
@@ -60,7 +59,6 @@ async function send_nurses_message(nurses, nurse_type, shift, shift_id, date) {
             message = JSON.parse(message);
         } catch (parseError) {
             console.error('Failed to parse AI reply:', parseError);
-            return res.status(500).json({ ErrorMessage: "Invalid AI response format." });
         }
     }
       const AiMessage = message.message

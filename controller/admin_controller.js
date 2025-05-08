@@ -62,29 +62,30 @@ async function add_facility(req, res) {
         await client.query('BEGIN');
 
         const {
-            name, address, cityStateZip, multiplier,
-            phone, nurses,email
+            name, address, cityStateZip, multiplier, nurses, coordinators
         } = req.body;
 
-        const phone_number = await client.query(`
-            SELECT * FROM facilities
-            WHERE phone = $1 AND email = $2
-        `, [phone,email]);
+        for (const coordinator of coordinators) {
+            const phone_number = await client.query(`
+                SELECT * FROM coordinator
+                WHERE coordinator_phone = $1 OR coordinator_email = $2
+            `, [coordinator.phone,coordinator.email]);
 
-        if (phone_number.rows.length > 0) {
-            await client.query('ROLLBACK');
-            return res.json({
-                message: "Facility with this phone number already exists",
-                status: 400
-            });
+            if (phone_number.rows.length > 0) {
+                await client.query('ROLLBACK');
+                return res.json({
+                    message: "Facility with this phone number already exists",
+                    status: 400
+                });
+            }
         }
 
         const facilityInsert = await client.query(`
             INSERT INTO facilities
-            (name, address, city_state_zip, phone, overtime_multiplier, email)
-            VALUES ($1, $2, $3, $4, $5,$6)
+            (name, address, city_state_zip, overtime_multiplier)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
-        `, [name, address, cityStateZip, phone, multiplier,email]);
+        `, [name, address, cityStateZip,multiplier]);
 
         const facilityId = facilityInsert.rows[0].id;
 
@@ -112,7 +113,15 @@ async function add_facility(req, res) {
                 nurse.pmMealEnd, nurse.nocMealStart, nurse.nocMealEnd, nurse.rate, hours
             ]);
         }
-
+        for (const coordinator of coordinators) {
+            await client.query(`
+                INSERT INTO coordinator
+                (facility_id, coordinator_first_name, coordinator_last_name, coordinator_phone, coordinator_email)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [
+                facilityId, coordinator.firstName, coordinator.lastName, coordinator.phone, coordinator.email
+            ]);
+        }
         await client.query('COMMIT');
         return res.json({
             message: "Facility added successfully",
@@ -134,16 +143,16 @@ async function edit_facility(req, res) {
         const id = req.params.id;
         const {
             name, address, cityStateZip, multiplier,
-            phone, nurses, email
+            nurses, coordinators
         } = req.body;
         
         await client.query('BEGIN');
         
-        if (phone) {
+        for (const coordinator of coordinators) {
             const phone_number = await client.query(`
-                SELECT * FROM facilities
-                WHERE phone = $1 AND email = $2 AND id != $3
-            `, [phone,email,id]);
+                SELECT * FROM coordinator
+                WHERE (coordinator_phone = $1 OR coordinator_email = $2) AND id!= $3
+            `, [coordinator.phone,coordinator.email,coordinator.id]);
 
             if (phone_number.rows.length > 0) {
                 await client.query('ROLLBACK');
@@ -156,14 +165,9 @@ async function edit_facility(req, res) {
 
         await client.query(`
             UPDATE facilities
-            SET name = $1, address = $2, city_state_zip = $3, phone = $4, overtime_multiplier = $5, email = $7
-            WHERE id = $6
-        `, [name, address, cityStateZip, phone, multiplier, id, email]);
-        await client.query(`
-            UPDATE shift_tracker
-            SET location = $1, name = $2
-            WHERE created_by = $3 OR created_by = $4
-            `,[cityStateZip, name, phone, email])
+            SET name = $1, address = $2, city_state_zip = $3, overtime_multiplier = $4
+            WHERE id = $5
+        `, [name, address, cityStateZip, multiplier, id]);
         function timeStringToMs(timeStr) {
             if (!timeStr) return 0;
             const [hours, minutes] = timeStr.split(':').map(Number);
@@ -206,6 +210,24 @@ async function edit_facility(req, res) {
                 ]);
             }
         }
+        for (const coordinator of coordinators) {
+            if(coordinator.id){
+                await client.query(`
+                    UPDATE coordinator
+                    SET coordinator_first_name = $2, coordinator_last_name = $3, coordinator_phone = $4, coordinator_email = $5
+                    WHERE id = $1
+                `, [coordinator.id, coordinator.firstName, coordinator.lastName, coordinator.phone, coordinator.email]);
+            }
+            else{
+                await client.query(`
+                    INSERT INTO coordinator
+                    (facility_id, coordinator_first_name, coordinator_last_name, coordinator_phone, coordinator_email)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [
+                    id, coordinator.firstName, coordinator.lastName, coordinator.phone, coordinator.email
+                ]);
+            }
+        }
 
         await client.query('COMMIT');
         return res.json({
@@ -231,7 +253,7 @@ async function get_facility(req, res) {
   
       const baseQuery = `
         FROM facilities
-        ${searchTerm ? `WHERE name ILIKE $1 OR phone ILIKE $1 OR email ILIKE $1 OR city_state_zip ILIKE $1` : ''}
+        ${searchTerm ? `WHERE name ILIKE $1 OR city_state_zip ILIKE $1` : ''}
       `;
   
       if (noPagination === 'true') {
@@ -289,7 +311,11 @@ async function get_facility_by_id(req, res) {
             SELECT * FROM shifts
             WHERE facility_id = $1`,
             [id])
-        return res.json({ facilities: rows[0], services: services.rows, status: 200 });
+        const {rows: coordinators} = await pool.query(`
+            SELECT * FROM coordinator
+            WHERE facility_id = $1`,
+            [id])
+        return res.json({ facilities: rows[0], services: services.rows, coordinators: coordinators,status: 200 });
     } catch (error) {
         console.error("Error fetching facilities:", error.message);
         return res.status(500).json({ message: "Server error", status: 500 });
@@ -346,6 +372,13 @@ async function get_nurses(req, res) {
 async function add_nurse(req,res){
     try {
         const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location, shift} = req.body
+        const { rows } = await pool.query(`
+            SELECT * FROM nurses
+            WHERE email = $1 OR mobile_number = $2
+        `,[email,phone])
+        if(rows.length > 0){
+            return res.json({message:"Nurse with this email or phone number already exists", status:400, nurse:rows[0]})
+        }
         await pool.query(`
             INSERT INTO nurses
             (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type, mobile_number,location, shift)
@@ -408,6 +441,13 @@ async function edit_nurse(req,res){
     try {
         const { id } = req.params;
         const {firstName, lastName, scheduleName, rate, shiftDif, otRate, email, talentId, position, phone, location,shift } = req.body
+        const { rows } = await pool.query(`
+            SELECT * FROM nurses
+            WHERE (email = $1 OR mobile_number = $2) AND id != $3
+        `,[email,phone,id])
+        if(rows.length > 0){
+            return res.json({message:"Nurse with this email or phone number already exists", status:400, nurse:rows[0]})
+        }
         await pool.query(`
             UPDATE nurses
             SET first_name = $1, last_name = $2, schedule_name = $3, rate = $4, shift_dif = $5, ot_rate = $6, email = $7, talent_id = $8, nurse_type = $9, mobile_number = $10, location = $12, shift = $13
@@ -485,10 +525,31 @@ router.delete('/delete-nurse-type/:id', delete_nurse_type)
 async function delete_nurse_type(req, res) {
     try {
         const { id } = req.params;
+        const {rows} = await pool.query(`
+            SELECT * FROM nurse_type
+            WHERE id = $1`,
+            [id]);
+        const nurse_type = rows[0].nurse_type
+
         await pool.query(`
             DELETE FROM nurse_type
             WHERE id = $1`,
             [id]
+        );
+        await pool.query(`
+            DELETE FROM shifts
+            WHERE role ILIKE $1`,
+            [nurse_type]
+        );
+        await pool.query(`
+            DELETE FROM nurses
+            WHERE nurse_type ILIKE $1`,
+            [nurse_type]
+        );
+        await pool.query(`
+            DELETE FROM shift_tracker
+            WHERE nurse_type ILIKE $1`,
+            [nurse_type]
         );
         res.json({ message: "Nurse type deleted successfully", status: 200 });
     } catch (error) {
@@ -501,11 +562,34 @@ async function edit_nurse_type(req, res) {
     try {
         const { id } = req.params;
         const { nurse_type } = req.body;
+        const { rows } = await pool.query(`
+            SELECT * FROM nurse_type
+            WHERE id = $1`,
+            [id]);
+        const old_nurse_type = rows[0].nurse_type
         await pool.query(`
             UPDATE nurse_type
             SET nurse_type = $1
             WHERE id = $2`,
             [nurse_type, id]
+        );
+        await pool.query(`
+            UPDATE shifts
+            SET role = $1
+            WHERE role ILIKE $2`,
+            [nurse_type, old_nurse_type]
+        );
+        await pool.query(`
+            UPDATE nurses
+            SET nurse_type = $1
+            WHERE nurse_type ILIKE $2`,
+            [nurse_type, old_nurse_type]
+        );
+        await pool.query(`
+            UPDATE shift_tracker
+            SET nurse_type = $1
+            WHERE nurse_type ILIKE $2`,
+            [nurse_type, old_nurse_type]
         );
         res.json({ message: "Nurse type updated successfully", status: 200 });
     }
@@ -520,11 +604,6 @@ async function get_shifts(req, res) {
   
     const filters = [];
     const values = [];
-  
-    if (facility) {
-      values.push(facility);
-      filters.push(`name = $${values.length}`);
-    }
     if (nurseType) {
       values.push(nurseType);
       filters.push(`nurse_type = $${values.length}`);
@@ -540,11 +619,17 @@ async function get_shifts(req, res) {
   
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
     const query = `SELECT * FROM shift_tracker ${whereClause} ORDER BY date, shift`;
+    if (facility) {
+        const {rows: facilities} = await pool.query(`
+            SELECT * FROM facilities
+            WHERE name = $1`,
+            [facility]);
+        }
     try {
       const result = await pool.query(query, values);
       const events = [];
       for (const row of result.rows) {
-        const { created_by, nurse_type, shift: shiftValue, date } = row;
+        const { facility_id, nurse_type, shift: shiftValue, date } = row;
         const {rows: nurse} = await pool.query(`
             SELECT first_name, last_name FROM nurses
             where id = $1`,
@@ -555,14 +640,6 @@ async function get_shifts(req, res) {
         else{
             nurse_name = nurse[0].first_name + " " + nurse[0].last_name
         }
-        // Get facility ID
-        const { rows: facilityRows } = await pool.query(
-          `SELECT id FROM facilities WHERE phone = $1 OR email = $1`,
-          [created_by]
-        );
-        if (!facilityRows.length) continue;
-  
-        const facility_id = facilityRows[0].id;
         // Get shift timings
         const { rows: shiftRows } = await pool.query(
           `SELECT * FROM shifts WHERE facility_id = $1 AND role ILIKE $2 `,
@@ -598,15 +675,19 @@ async function get_shifts(req, res) {
 const start = `${formattedDate}T${startTime}`; // "2025-06-01T12:00:00"
 const end = `${formattedDate}T${endTime}`;     // "2025-06-01T20:00:00"
 
-  
+        const {rows: facility} = await pool.query(`
+            SELECT name FROM facilities
+            WHERE id = $1`,
+            [facility_id])
+        const name = facility[0].name
         events.push({
           id: row.id,
-          title: `${row.nurse_type} at ${row.name}`,
+          title: `${row.nurse_type} at ${name}`,
           start,
           end,
           extendedProps: {
             nurse_type: row.nurse_type,
-            facility: row.name,
+            facility: name,
             status: row.status,
             date: row.date,
             shift: row.shift,
@@ -622,6 +703,19 @@ const end = `${formattedDate}T${endTime}`;     // "2025-06-01T20:00:00"
     }
   }
 
+  async function delete_coordinator(req,res){
+    try {
+        const {id} = req.params
+        await pool.query(`
+            DELETE FROM coordinator
+            WHERE id = $1`,
+            [id])
+        res.json({message:"Coordinator deleted successfully", status:200})
+    } catch (error) {
+        res.status(500).json({message:"An Error has occured",status:500})
+        console.error(error)
+    }
+  }
 
   
   
@@ -644,6 +738,7 @@ module.exports = {
     get_nurse_types,
     delete_nurse_type,
     edit_nurse_type,
-    get_shifts
+    get_shifts,
+    delete_coordinator
 
 }
