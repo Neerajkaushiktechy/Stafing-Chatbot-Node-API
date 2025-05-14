@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const router = require('../routes/nurseRoutes');
 const pool = require('../db');
+const { sendMessage } = require('../services/sendMessageAPI');
 async function admin_login(req, res) {
     try {
         const { email, password } = req.body;
@@ -600,7 +601,7 @@ async function edit_nurse_type(req, res) {
 }
 
 async function get_shifts(req, res) {
-    const { nurseType, facility, shift, status } = req.query;
+    const { nurseType, facility, shift, status, name } = req.query;
   
     const filters = [];
     const values = [];
@@ -616,7 +617,6 @@ async function get_shifts(req, res) {
       values.push(status);
       filters.push(`status = $${values.length}`);
     }
-  
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
     const query = `SELECT * FROM shift_tracker ${whereClause} ORDER BY date, shift`;
     if (facility) {
@@ -671,9 +671,8 @@ async function get_shifts(req, res) {
         const month = String(localDate.getMonth() + 1).padStart(2, '0');
         const day = String(localDate.getDate()).padStart(2, '0');
         const formattedDate = `${year}-${month}-${day}`;
-         // gives "2025-06-01"
-const start = `${formattedDate}T${startTime}`; // "2025-06-01T12:00:00"
-const end = `${formattedDate}T${endTime}`;     // "2025-06-01T20:00:00"
+        const start = `${formattedDate}T${startTime}`;
+        const end = `${formattedDate}T${endTime}`;
 
         const {rows: facility} = await pool.query(`
             SELECT name FROM facilities
@@ -717,8 +716,412 @@ const end = `${formattedDate}T${endTime}`;     // "2025-06-01T20:00:00"
     }
   }
 
+async function get_all_shifts(req, res) {
+  try {
+    const { search } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const searchTerm = search ? `%${search.toLowerCase()}%` : null;
+
+    let query, countQuery, values, countValues;
+
+    if (searchTerm) {
+      query = `
+        SELECT 
+          s.*, 
+          CONCAT(n.first_name, ' ', n.last_name) AS nurse_name,
+          f.name AS facility_name,
+          CONCAT(c.coordinator_first_name, ' ', c.coordinator_last_name) AS coordinator_name
+        FROM shift_tracker s
+        LEFT JOIN nurses n ON s.nurse_id = n.id
+        LEFT JOIN facilities f ON s.facility_id = f.id
+        LEFT JOIN coordinator c ON s.coordinator_id = c.id
+        WHERE 
+          LOWER(CONCAT(n.first_name, ' ', n.last_name)) ILIKE $1
+          OR LOWER(f.name) ILIKE $1
+          OR LOWER(CONCAT(c.coordinator_first_name, ' ', c.coordinator_last_name)) ILIKE $1
+          OR LOWER(s.nurse_type) ILIKE $1
+          OR LOWER(s.shift) ILIKE $1
+          OR LOWER(s.status) ILIKE $1
+        ORDER BY s.id DESC
+        LIMIT $2 OFFSET $3
+      `;
+
+      countQuery = `
+        SELECT COUNT(*) AS total
+        FROM shift_tracker s
+        LEFT JOIN nurses n ON s.nurse_id = n.id
+        LEFT JOIN facilities f ON s.facility_id = f.id
+        LEFT JOIN coordinator c ON s.coordinator_id = c.id
+        WHERE 
+          LOWER(CONCAT(n.first_name, ' ', n.last_name)) ILIKE $1
+          OR LOWER(f.name) ILIKE $1
+          OR LOWER(CONCAT(c.coordinator_first_name, ' ', c.coordinator_last_name)) ILIKE $1
+          OR LOWER(s.nurse_type) ILIKE $1
+          OR LOWER(s.shift) ILIKE $1
+          OR LOWER(s.status) ILIKE $1
+      `;
+
+      values = [searchTerm, limit, offset];
+      countValues = [searchTerm];
+    } else {
+      query = `
+        SELECT 
+          s.*, 
+          CONCAT(n.first_name, ' ', n.last_name) AS nurse_name,
+          f.name AS facility_name,
+          CONCAT(c.coordinator_first_name, ' ', c.coordinator_last_name) AS coordinator_name
+        FROM shift_tracker s
+        LEFT JOIN nurses n ON s.nurse_id = n.id
+        LEFT JOIN facilities f ON s.facility_id = f.id
+        LEFT JOIN coordinator c ON s.coordinator_id = c.id
+        ORDER BY s.id DESC
+        LIMIT $1 OFFSET $2
+      `;
+
+      countQuery = `SELECT COUNT(*) AS total FROM shift_tracker`;
+      values = [limit, offset];
+      countValues = [];
+    }
+
+    const [result, countResult] = await Promise.all([
+      pool.query(query, values),
+      pool.query(countQuery, countValues)
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+
+    res.json({
+      page,
+      limit,
+      total: total,
+      totalPages: Math.ceil(total / limit),
+      shifts: result.rows.map(shift => ({
+        ...shift,
+        nurse_name: shift.nurse_name || "Not assigned",
+        coordinator_name: shift.coordinator_name || "Not assigned"
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "An Error has occurred", status: 500 });
+  }
+}
+
   
-  
+  async function delete_shift_admin(req, res) {
+    try {
+        const { id } = req.params;
+
+        const { rows: shiftDetails } = await pool.query(`
+            SELECT coordinator_id, nurse_id, date, shift, nurse_type, status, facility_id
+            FROM shift_tracker
+            WHERE id = $1`,
+            [id]);
+
+        if (shiftDetails.length === 0) {
+            return res.status(404).json({ message: "Shift not found", status: 404 });
+        }
+
+        const {
+            coordinator_id,
+            nurse_id,
+            date: shiftDate,
+            shift: shiftType,
+            nurse_type: nurseType,
+            status: shiftStatus,
+            facility_id
+        } = shiftDetails[0];
+
+        const { rows: coordinatorContact } = await pool.query(`
+            SELECT coordinator_phone, coordinator_email FROM coordinator
+            WHERE id = $1`,
+            [coordinator_id]);
+
+        const phone = coordinatorContact[0]?.coordinator_phone;
+        const email = coordinatorContact[0]?.coordinator_email;
+
+        const { rows: facility } = await pool.query(`
+            SELECT name FROM facilities
+            WHERE id = $1`,
+            [facility_id]);
+
+        const facilityName = facility[0]?.name || "Unknown Facility";
+
+        const message = `Hello, the shift for ${nurseType} on ${shiftDate} for ${shiftType} shift at ${facilityName} has been deleted by the admin.`;
+
+        if (phone) sendMessage(phone, message);
+        if (email) sendMessage(email, message);
+
+        if (nurse_id) {
+            const { rows: nurseContact } = await pool.query(`
+                SELECT mobile_number, email FROM nurses
+                WHERE id = $1`,
+                [nurse_id]);
+
+            const nursePhone = nurseContact[0]?.mobile_number;
+            const nurseEmail = nurseContact[0]?.email;
+
+            if (shiftStatus === 'filled') {
+                if (nursePhone) sendMessage(nursePhone, message);
+                if (nurseEmail) sendMessage(nurseEmail, message);
+            }
+        }
+
+        await pool.query(`
+            DELETE FROM shift_tracker
+            WHERE id = $1`,
+            [id]);
+
+        res.json({ message: "Shift deleted successfully", status: 200 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "An error has occurred", status: 500 });
+    }
+}
+
+async function get_coordinators_by_facility(req,res){
+    try {
+        const {id} = req.params
+        const {rows} = await pool.query(`
+            SELECT * FROM coordinator
+            WHERE facility_id = $1`,
+            [id])
+        res.json({coordinators:rows, status:200})
+    } catch (error) {
+        res.status(500).json({message:"An Error has occured",status:500})
+        console.error(error)
+    }
+}
+
+async function get_coordinator_by_id(req, res) {
+    try {
+        const { id } = req.params;
+        const { rows } = await pool.query(`
+            SELECT * FROM coordinator
+            WHERE id = $1
+        `,[id]);
+        return res.json({ coordinatorData: rows[0], status: 200 });
+    } catch (error) {
+        console.error("Error fetching facilities:", error.message);
+        return res.status(500).json({ message: "Server error", status: 500 });
+    }
+}
+
+async function fetch_available_nurses(req, res) {
+    try {
+        const {facility_id, nurse_type, date, shift} = req.query;
+        console.log("FETCH AVAILABLE NURSEs", req.query)
+        const {rows: facility} = await pool.query(`
+            SELECT * FROM facilities
+            WHERE id = $1`,
+            [facility_id])
+        const facilityLocation = facility[0]?.city_state_zip || '';
+        const [city, state, zip] = facilityLocation.split(',').map(part => part.trim()).filter(Boolean);
+        const {rows: nurses} = await pool.query(`
+            SELECT *
+            FROM nurses
+            WHERE nurse_type ILIKE $1
+              AND shift ILIKE $2
+              AND (
+                location ILIKE $3
+                OR location ILIKE $4
+                OR location ILIKE $5
+              )
+        `, [nurse_type, shift, `%${city}%`, `%${state}%`, `%${zip}%`])
+        const nurseIds = nurses.map(nurse => nurse.id);
+        console.log("NURSE IDS", nurseIds)
+        if (nurseIds.length === 0) {
+            console.log("NURSE IDS", nurseIds)
+            return res.json({ nurses: [], status: 200 });
+          }
+          
+const { rows: availableNurses } = await pool.query(`
+    SELECT n.*
+    FROM nurses n
+    LEFT JOIN shift_tracker st
+      ON n.id = st.nurse_id AND st.date = $2
+    WHERE n.id = ANY($1)
+      AND st.nurse_id IS NULL
+`, [nurseIds, date]);
+
+          console.log("AVAILABLE NURSES", availableNurses)
+        res.json({ nurses: availableNurses, status: 200 });
+    } catch (error) {
+        console.error("Error fetching nurses:", error.message);
+        res.status(500).json({ message: "Server error", status: 500 });
+    }
+}
+
+async function add_shift(req, res) {
+    try {
+        const {facility,
+            coordinator,
+            position,
+            scheduleDate,
+            nurse,
+            shift} = req.body;
+    await pool.query(`
+        INSERT INTO shift_tracker
+        (facility_id, coordinator_id, nurse_id, nurse_type, date, shift, status, booked_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [facility, coordinator, nurse, position, scheduleDate, shift, 'filled', 'admin'])
+    const {rows: facilityDetails} = await pool.query(`
+        SELECT * FROM facilities
+        WHERE id = $1`,
+        [facility])
+    const facilityLocation = facilityDetails[0]?.city_state_zip || '';
+    const facilityName = facilityDetails[0]?.name || '';
+
+    const {rows: nurseDetails} = await pool.query(`
+        SELECT * FROM nurses
+        WHERE id = $1`,
+        [nurse])
+    const nurseName = nurseDetails[0]?.first_name || '';
+    const nurseEmail = nurseDetails[0]?.email || '';
+    const nursePhone = nurseDetails[0]?.mobile_number || '';
+
+    const {rows: coordinatorDetails} = await pool.query(`
+        SELECT * FROM coordinator
+        WHERE id = $1`,
+        [coordinator])
+    const coordinatorPhone = coordinatorDetails[0]?.coordinator_phone || '';
+    const coordinatorEmail = coordinatorDetails[0]?.coordinator_email || '';
+
+    const messageNurse = `A new shift at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift has been assigned to you by the admin.`
+    const messageCoordinator = `A new nurse at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift has been booked for you by the admin.`
+    sendMessage(nurseEmail, messageNurse)
+    sendMessage(coordinatorEmail, messageCoordinator)
+    sendMessage(nursePhone, messageNurse)
+    sendMessage(coordinatorPhone, messageCoordinator)
+        res.json({message:"Shift added successfully", status:200})
+    } catch (error) {
+        res.status(500).json({message:"An Error has occured",status:500})
+        console.error(error)
+    }
+}
+
+async function get_shift_details_by_id(req, res) {
+    try {
+        const {id} = req.params;
+        const {rows} = await pool.query(`
+            SELECT * FROM shift_tracker
+            WHERE id = $1`,
+            [id])
+        res.json({shift:rows[0], status:200})
+    } catch (error) {
+        res.status(500).json({message:"An Error has occured",status:500})
+        console.error(error)
+    }
+}
+
+async function edit_shift(req, res) {
+    try {
+        const { id } = req.params;
+        const { facility, coordinator, position, scheduleDate, nurse, shift } = req.body;
+
+        const { rows: existingShiftRows } = await pool.query(`
+            SELECT * FROM shift_tracker WHERE id = $1
+        `, [id]);
+
+        if (existingShiftRows.length === 0) {
+            return res.status(404).json({ message: "Shift not found", status: 404 });
+        }
+
+        const existingShift = existingShiftRows[0];
+        const {
+            nurse_id: oldNurseId,
+            coordinator_id: oldCoordinatorId,
+            date: oldDate,
+            shift: oldShift,
+            nurse_type: oldPosition,
+            facility_id: oldFacilityId
+        } = existingShift;
+
+        const { rows: facilityRows } = await pool.query(`
+            SELECT * FROM facilities WHERE id = $1
+        `, [facility]);
+        const facilityName = facilityRows[0]?.name || "Unknown Facility";
+
+        // 🧑‍⚕️ Nurse Notification Logic
+        if (nurse !== oldNurseId) {
+            if (oldNurseId) {
+                const { rows: oldNurseRows } = await pool.query(`
+                    SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
+                `, [oldNurseId]);
+                const oldNurse = oldNurseRows[0];
+                const message = `Hi ${oldNurse.first_name}, your previously assigned shift for ${oldPosition} on ${oldDate} (${oldShift} shift) at ${facilityName} has been reassigned to another nurse. Thank you for your support.`;
+                sendMessage(oldNurse.email, message);
+                sendMessage(oldNurse.mobile_number, message);
+            }
+
+            if (nurse) {
+                const { rows: newNurseRows } = await pool.query(`
+                    SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
+                `, [nurse]);
+                const newNurse = newNurseRows[0];
+                const message = `Hi ${newNurse.first_name}, you've been scheduled for a new ${position} shift on ${scheduleDate} (${shift} shift) at ${facilityName}. Please confirm your availability.`;
+                sendMessage(newNurse.email, message);
+                sendMessage(newNurse.mobile_number, message);
+            }
+        } else if (nurse) {
+            const { rows: nurseRows } = await pool.query(`
+                SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
+            `, [nurse]);
+            const nurseDetails = nurseRows[0];
+            const message = `Hi ${nurseDetails.first_name}, there have been updates to your shift: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}. Please take note of the changes.`;
+            sendMessage(nurseDetails.email, message);
+            sendMessage(nurseDetails.mobile_number, message);
+        }
+
+        // 🧑‍💼 Coordinator Notification Logic
+        if (coordinator !== oldCoordinatorId) {
+            if (oldCoordinatorId) {
+                const { rows: oldCoordinatorRows } = await pool.query(`
+                    SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
+                `, [oldCoordinatorId]);
+                const oldCoordinator = oldCoordinatorRows[0];
+                const message = `Dear ${oldCoordinator.coordinator_first_name}, the coordination responsibility for the ${oldPosition} shift on ${oldDate} (${oldShift} shift) at ${facilityName} has been assigned to another coordinator. Thank you for your efforts.`;
+                sendMessage(oldCoordinator.coordinator_email, message);
+                sendMessage(oldCoordinator.coordinator_phone, message);
+            }
+
+            if (coordinator) {
+                const { rows: newCoordinatorRows } = await pool.query(`
+                    SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
+                `, [coordinator]);
+                const newCoordinator = newCoordinatorRows[0];
+                const message = `Dear ${newCoordinator.coordinator_first_name}, you are now responsible for overseeing the ${position} shift on ${scheduleDate} (${shift} shift) at ${facilityName}. Please ensure smooth coordination.`;
+                sendMessage(newCoordinator.coordinator_email, message);
+                sendMessage(newCoordinator.coordinator_phone, message);
+            }
+        } else if (coordinator) {
+            const { rows: coordinatorRows } = await pool.query(`
+                SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
+            `, [coordinator]);
+            const coordinatorDetails = coordinatorRows[0];
+            const message = `Dear ${coordinatorDetails.coordinator_first_name}, the shift details under your coordination have been updated. New details: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}. Please review.`;
+            sendMessage(coordinatorDetails.coordinator_email, message);
+            sendMessage(coordinatorDetails.coordinator_phone, message);
+        }
+
+        // Update shift in DB
+        await pool.query(`
+            UPDATE shift_tracker
+            SET facility_id = $1, coordinator_id = $2, nurse_id = $3, nurse_type = $4, date = $5, shift = $6
+            WHERE id = $7
+        `, [facility, coordinator, nurse, position, scheduleDate, shift, id]);
+
+        res.json({ message: "Shift updated successfully", status: 200 });
+
+    } catch (error) {
+        console.error("Error editing shift:", error.message);
+        res.status(500).json({ message: "Server error", status: 500 });
+    }
+}
+
 module.exports = {
     admin_login,
     add_facility,
@@ -739,6 +1142,14 @@ module.exports = {
     delete_nurse_type,
     edit_nurse_type,
     get_shifts,
-    delete_coordinator
+    delete_coordinator,
+    get_all_shifts,
+    delete_shift_admin,
+    get_coordinators_by_facility,
+    get_coordinator_by_id,
+    fetch_available_nurses,
+    add_shift,
+    get_shift_details_by_id,
+    edit_shift
 
 }
