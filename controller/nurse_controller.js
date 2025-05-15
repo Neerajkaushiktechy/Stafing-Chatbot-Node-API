@@ -1,6 +1,7 @@
 const { generateMessageForNurseAI } = require('../helper/promptHelper.js');
 const pool = require('../db.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
+const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 require('dotenv').config();
 async function search_nurses(nurse_type, shift, shift_id) {
   try {
@@ -40,14 +41,14 @@ async function search_nurses(nurse_type, shift, shift_id) {
 }
 
 
-async function send_nurses_message(nurses, nurse_type, shift, shift_id, date) {
+async function send_nurses_message(nurses, nurse_type, shift, shift_id, date, additional_instructions) {
   for (const nurse of nurses) {
 
     const phoneNumber = nurse.mobile_number;
     const nurse_availability = await check_nurse_availability(nurse.id, shift_id);
     if (nurse_availability) {
       const pastMessages = await get_nurse_chat_data(phoneNumber)
-      let message = await generateMessageForNurseAI(nurse_type, shift, date,pastMessages,shift_id)
+      let message = await generateMessageForNurseAI(nurse_type, shift, date,pastMessages,shift_id, additional_instructions)
       if (typeof message === 'string') {
         message = message.trim();
         if (message.startsWith('```json')) {
@@ -121,11 +122,38 @@ async function get_nurse_chat_data(sender){
   }
 }
 
+async function follow_up_reply(sender,message){
+  const {rows: nurse} = await pool.query(`
+  SELECT id
+  FROM nurses
+  WHERE mobile_number = $1
+  `,[sender])
+  const nurse_id = nurse[0].id
+  const {rows: shifts} = await pool.query(`
+    SELECT coordinator_id
+    FROM shift_tracker
+    WHERE nurse_id = $1
+    AND date = CURRENT_DATE
+  `,[nurse_id])
+
+  const coordinator_id = shifts[0].coordinator_id
+  const {rows: coordinator} = await pool.query(`
+    SELECT coordinator_email
+    FROM coordinator
+    WHERE id = $1
+  `,[coordinator_id])
+  const coordinator_email = coordinator[0].coordinator_email
+  const coordinator_phone = coordinator[0].coordinator_phone
+  await sendMessage(coordinator_email,message)
+  await sendMessage(coordinator_phone,message)
+  await update_coordinator_chat_history(sender,message,"sent")
+}
 module.exports = {
     search_nurses,
     send_nurses_message,
     update_nurse_chat_history,
     get_nurse_chat_data,
-    check_nurse_availability
+    check_nurse_availability,
+    follow_up_reply
 
 }

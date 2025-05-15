@@ -1,7 +1,7 @@
 const pool = require('../db.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
-
+const {generateFollowUpMessageForNurse} = require('../helper/promptHelper.js')
 
 async function update_coordinator(shift_id, nurse_phoneNumber) {
     const nurse = await get_nurse_info(nurse_phoneNumber);
@@ -185,10 +185,91 @@ async function check_nurse_type(sender,nurse_type) {
     }
     return true;
 }
+
+async function follow_up_message_send(sender, nurse_name_input, follow_up_message) {
+  // Get coordinator ID
+  const { rows: coordinator } = await pool.query(`
+    SELECT id
+    FROM coordinator
+    WHERE coordinator_phone = $1 OR coordinator_email = $1
+  `, [sender]);
+
+  if (coordinator.length === 0) {
+    console.log('Coordinator not found.');
+    return;
+  }
+
+  const coordinator_id = coordinator[0].id;
+
+  // Get matching shifts for today with nurse and facility info
+  const { rows: matchingShifts } = await pool.query(`
+    SELECT 
+      s.id AS shift_id,
+      n.first_name,
+      n.last_name,
+      n.mobile_number,
+      n.email,
+      f.name,
+      s.date
+    FROM shift_tracker s
+    JOIN nurses n ON s.nurse_id = n.id
+    JOIN facilities f ON s.facility_id = f.id
+    WHERE s.coordinator_id = $1
+      AND s.date = CURRENT_DATE
+      AND (
+        LOWER(n.first_name) = LOWER($2) OR
+        LOWER(CONCAT(n.first_name, ' ', n.last_name)) = LOWER($2)
+      )
+  `, [coordinator_id, nurse_name_input]);
+
+  if (matchingShifts.length === 0) {
+    await sendMessage(sender, `No shift for ${nurse_name_input} found for today.`);
+    console.log('No matching nurse shift found for today.');
+    return;
+  }
+
+  const sentTo = new Set(); // to prevent duplicate sends per nurse
+
+  for (const shift of matchingShifts) {
+    const { first_name, last_name, name:facility_name, mobile_number, email } = shift;
+    const full_name = `${first_name} ${last_name}`;
+
+    const recipientKey = `${full_name}_${mobile_number}_${email}`;
+    if (sentTo.has(recipientKey)) continue;
+
+    try {
+      let replyMessage = await generateFollowUpMessageForNurse(full_name, follow_up_message, facility_name);
+            if (typeof replyMessage === 'string') {
+            replyMessage = replyMessage.trim();
+            if (replyMessage.startsWith('```json')) {
+                replyMessage = replyMessage.replace(/```json|```/g, '').trim();
+            } else if (replyMessage.startsWith('```')) {
+                replyMessage = replyMessage.replace(/```/g, '').trim();
+            }
+            try {
+                replyMessage = JSON.parse(replyMessage);
+            } catch (parseError) {
+                console.error('Failed to parse AI reply:', parseError);
+                return res.status(500).json({ message: "Invalid AI response format." });
+            }
+        }
+        console.log("replyMessage",replyMessage)
+      if (mobile_number) await sendMessage(mobile_number, replyMessage.message);
+      if (email) await sendMessage(email, replyMessage.message);
+
+      sentTo.add(recipientKey);
+    } catch (err) {
+      console.error(`Failed to send message to ${full_name}:`, err);
+    }
+  }
+}
+
+
 module.exports = {
     update_coordinator, 
     update_coordinator_chat_history, 
     get_coordinator_chat_data, 
     validate_shift_before_cancellation,
-    check_nurse_type
+    check_nurse_type,
+    follow_up_message_send
 };
