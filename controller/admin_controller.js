@@ -962,12 +962,13 @@ async function add_shift(req, res) {
             position,
             scheduleDate,
             nurse,
+            additionalNotes,
             shift} = req.body;
     await pool.query(`
         INSERT INTO shift_tracker
-        (facility_id, coordinator_id, nurse_id, nurse_type, date, shift, status, booked_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [facility, coordinator, nurse, position, scheduleDate, shift, 'filled', 'admin'])
+        (facility_id, coordinator_id, nurse_id, nurse_type, date, shift, status, booked_by, additional_instructions)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [facility, coordinator, nurse, position, scheduleDate, shift, 'filled', 'admin', additionalNotes])
     const {rows: facilityDetails} = await pool.query(`
         SELECT * FROM facilities
         WHERE id = $1`,
@@ -990,7 +991,7 @@ async function add_shift(req, res) {
     const coordinatorPhone = coordinatorDetails[0]?.coordinator_phone || '';
     const coordinatorEmail = coordinatorDetails[0]?.coordinator_email || '';
 
-    const messageNurse = `A new shift at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift has been assigned to you by the admin.`
+    const messageNurse = `A new shift at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift. Notes: ${additionalNotes} has been assigned to you by the admin.`
     const messageCoordinator = `A new nurse at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift has been booked for you by the admin.`
     sendMessage(nurseEmail, messageNurse)
     sendMessage(coordinatorEmail, messageCoordinator)
@@ -1020,7 +1021,7 @@ async function get_shift_details_by_id(req, res) {
 async function edit_shift(req, res) {
     try {
         const { id } = req.params;
-        const { facility, coordinator, position, scheduleDate, nurse, shift } = req.body;
+        const { facility, coordinator, position, scheduleDate, nurse, shift, additionalNotes } = req.body;
 
         const { rows: existingShiftRows } = await pool.query(`
             SELECT * FROM shift_tracker WHERE id = $1
@@ -1037,7 +1038,8 @@ async function edit_shift(req, res) {
             date: oldDate,
             shift: oldShift,
             nurse_type: oldPosition,
-            facility_id: oldFacilityId
+            facility_id: oldFacilityId,
+
         } = existingShift;
 
         const { rows: facilityRows } = await pool.query(`
@@ -1062,7 +1064,7 @@ async function edit_shift(req, res) {
                     SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
                 `, [nurse]);
                 const newNurse = newNurseRows[0];
-                const message = `Hi ${newNurse.first_name}, you've been scheduled for a new ${position} shift on ${scheduleDate} (${shift} shift) at ${facilityName}. Please confirm your availability.`;
+                const message = `Hi ${newNurse.first_name}, you've been scheduled for a new ${position} shift on ${scheduleDate} (${shift} shift) at ${facilityName}.Notes: ${additionalNotes}`;
                 sendMessage(newNurse.email, message);
                 sendMessage(newNurse.mobile_number, message);
             }
@@ -1071,7 +1073,7 @@ async function edit_shift(req, res) {
                 SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
             `, [nurse]);
             const nurseDetails = nurseRows[0];
-            const message = `Hi ${nurseDetails.first_name}, there have been updates to your shift: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}. Please take note of the changes.`;
+            const message = `Hi ${nurseDetails.first_name}, there have been updates to your shift: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}.Notes: ${additionalNotes}. Please take note of the changes.`;
             sendMessage(nurseDetails.email, message);
             sendMessage(nurseDetails.mobile_number, message);
         }
@@ -1102,7 +1104,7 @@ async function edit_shift(req, res) {
                 SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
             `, [coordinator]);
             const coordinatorDetails = coordinatorRows[0];
-            const message = `Dear ${coordinatorDetails.coordinator_first_name}, the shift details under your coordination have been updated. New details: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}. Please review.`;
+            const message = `Dear ${coordinatorDetails.coordinator_first_name}, the shift details under your coordination have been updated. New details: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}.Additional Notes: ${additionalNotes}. Please review.`;
             sendMessage(coordinatorDetails.coordinator_email, message);
             sendMessage(coordinatorDetails.coordinator_phone, message);
         }
@@ -1110,9 +1112,9 @@ async function edit_shift(req, res) {
         // Update shift in DB
         await pool.query(`
             UPDATE shift_tracker
-            SET facility_id = $1, coordinator_id = $2, nurse_id = $3, nurse_type = $4, date = $5, shift = $6
-            WHERE id = $7
-        `, [facility, coordinator, nurse, position, scheduleDate, shift, id]);
+            SET facility_id = $1, coordinator_id = $2, nurse_id = $3, nurse_type = $4, date = $5, shift = $6, status=$7, additional_instructions = $9
+            WHERE id = $8
+        `, [facility, coordinator, nurse, position, scheduleDate, shift,'filled' ,id, additionalNotes]);
 
         res.json({ message: "Shift updated successfully", status: 200 });
 

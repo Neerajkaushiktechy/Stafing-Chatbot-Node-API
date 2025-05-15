@@ -3,7 +3,7 @@ const { search_nurses, send_nurses_message, check_nurse_availability } = require
 const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 
-async function create_shift(created_by,nurse_type, shift,date, nurse_id=null, status="open")
+async function create_shift(created_by,nurse_type, shift,date, additional_instructions, nurse_id=null, status="open")
 {
     try {
       const {rows: facility} = await pool.query(`
@@ -15,10 +15,10 @@ async function create_shift(created_by,nurse_type, shift,date, nurse_id=null, st
       const coordinator_id = facility[0].id;
         const result = await pool.query(`
           INSERT INTO shift_tracker 
-          (nurse_type, shift, nurse_id, status, date, facility_id, coordinator_id, booked_by)
-          VALUES ($1, $2, $3, $4, $5, $6,$7,$8)
+          (nurse_type, shift, nurse_id, status, date, facility_id, coordinator_id, booked_by, additional_instructions)
+          VALUES ($1, $2, $3, $4, $5, $6,$7,$8, $9)
           RETURNING id
-        `, [nurse_type, shift, nurse_id, status, date,facility_id,coordinator_id,'bot']);
+        `, [nurse_type, shift, nurse_id, status, date,facility_id,coordinator_id,'bot',additional_instructions]);
     
         return result.rows[0].id;
     }catch (err) {

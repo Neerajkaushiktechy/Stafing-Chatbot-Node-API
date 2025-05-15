@@ -86,6 +86,7 @@ const createTables = async () => {
                 status VARCHAR(255) NOT NULL,
                 date DATE NOT NULL,
                 booked_by VARCHAR(255),
+                additional_instructions TEXT,
                 FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE CASCADE,
                 FOREIGN KEY (coordinator_id) REFERENCES coordinator(id) ON DELETE CASCADE
             )`)

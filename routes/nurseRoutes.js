@@ -3,7 +3,7 @@ const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
 const {update_coordinator} = require('../controller/coordinator_controller.js');
 const { check_shift_status, search_shift, shift_cancellation_nurse, check_shift_validity} = require('../controller/shift_controller.js');
-const { update_nurse_chat_history, get_nurse_chat_data } = require('../controller/nurse_controller.js');
+const { update_nurse_chat_history, get_nurse_chat_data, follow_up_reply } = require('../controller/nurse_controller.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
 
@@ -33,6 +33,7 @@ router.post('/chat_nurse', async (req, res) => {
             }
         }
         await update_nurse_chat_history(sender,replyMessage.message, "sent")
+        console.log("replyMessage",replyMessage)
         res.json({ message: replyMessage.message});
         if (replyMessage.confirmation==true && replyMessage.shift_id) {
             const shift_id = replyMessage.shift_id
@@ -59,6 +60,9 @@ router.post('/chat_nurse', async (req, res) => {
             }
         }
         
+        if(replyMessage.follow_up_reply){
+            await follow_up_reply(sender, replyMessage.coordinator_message)
+        }
     } catch (error) {
         console.error('Error generating response:', error);
         res.status(500).json({ message: "Sorry, something went wrong." });
