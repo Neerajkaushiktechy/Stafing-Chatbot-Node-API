@@ -3,7 +3,7 @@ const { generateReplyFromAI } = require('../helper/promptHelper.js');
 const router = express.Router();
 const { search_nurses, send_nurses_message } = require('../controller/nurse_controller.js');
 const { create_shift, search_shift, search_shift_by_id} = require('../controller/shift_controller.js');
-const { update_coordinator_chat_history, get_coordinator_chat_data, validate_shift_before_cancellation, check_nurse_type } = require('../controller/coordinator_controller.js');
+const { update_coordinator_chat_history, get_coordinator_chat_data, validate_shift_before_cancellation, check_nurse_type, follow_up_message_send } = require('../controller/coordinator_controller.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 router.post('/chat', async (req, res) => {
     const { sender, text } = req.body; 
@@ -27,22 +27,23 @@ router.post('/chat', async (req, res) => {
                 return res.status(500).json({ message: "Invalid AI response format." });
             }
         }
+        console.log("replyMessage",replyMessage)
         res.json({ message: replyMessage.message });
         if (replyMessage.nurse_details) {
             const nurseDetailsArray = Array.isArray(replyMessage.nurse_details) ? replyMessage.nurse_details : [replyMessage.nurse_details];
           
             for (const nurseDetail of nurseDetailsArray) {
-              const { nurse_type, shift, date } = nurseDetail;
+              const { nurse_type, shift, date, additional_instructions } = nurseDetail;
               const nurseExists = await check_nurse_type(sender,nurse_type);
                 if (!nurseExists) {
                     await sendMessage(sender, "The nurse type you requested is not linked with your account. Please check and try again.");
                     return;
                 }
                 
-              const shift_id = await create_shift(sender, nurse_type, shift, date);
+              const shift_id = await create_shift(sender, nurse_type, shift, date,additional_instructions);
           
               const nurses = await search_nurses(nurse_type, shift, shift_id);
-              await send_nurses_message(nurses, nurse_type, shift, shift_id, date);
+              await send_nurses_message(nurses, nurse_type, shift, shift_id, date, additional_instructions);
             }
           }
 
@@ -68,7 +69,11 @@ router.post('/chat', async (req, res) => {
               await search_shift_by_id(shiftID, sender);
             }
         }
-          
+        
+        if(replyMessage.follow_up && replyMessage.nurse_name){
+          const {nurse_name, follow_up_message} = replyMessage;
+          await follow_up_message_send(sender, nurse_name, follow_up_message)
+        }
 
         await update_coordinator_chat_history(sender, replyMessage.message, "sent")
         
