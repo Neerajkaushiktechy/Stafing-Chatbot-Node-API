@@ -1,7 +1,9 @@
 const pool = require('../db.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
 require('dotenv').config();
-const {generateFollowUpMessageForNurse} = require('../helper/promptHelper.js')
+const {generateFollowUpMessageForNurse} = require('../helper/promptHelper.js');
+const { update_nurse_chat_history } = require('./nurse_controller.js');
+const normalizeDate = require('../services/normalizeDates.js');
 
 async function update_coordinator(shift_id, nurse_phoneNumber) {
     const nurse = await get_nurse_info(nurse_phoneNumber);
@@ -11,7 +13,8 @@ async function update_coordinator(shift_id, nurse_phoneNumber) {
     const shiftInfo = await get_shift_information(shift_id);
 
     if (nurse && shiftInfo) {
-        const message = `Hello! Your shift requested at ${shiftInfo.name}, ${shiftInfo.location}, on ${shiftInfo.date} for ${shiftInfo.shift} shift has been filled. This shift will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
+      const formattedDate = normalizeDate(shiftInfo.date);
+        const message = `Hello! Your shift requested at ${shiftInfo.name}, on ${formattedDate} for ${shiftInfo.shift} shift has been filled. This shift will be covered by ${nurse.first_name}. You can reach out via ${nurse.mobile_number}.`;
         await sendMessage(recipient.coordinator_phone, message);
         await sendMessage(recipient.coordinator_email, message);
     } else {
@@ -255,8 +258,8 @@ async function follow_up_message_send(sender, nurse_name_input, follow_up_messag
         }
         console.log("replyMessage",replyMessage)
       if (mobile_number) await sendMessage(mobile_number, replyMessage.message);
-      if (email) await sendMessage(email, replyMessage.message);
-
+      update_nurse_chat_history(mobile_number,replyMessage.message, "sent")
+      update_nurse_chat_history(email,replyMessage.message, "sent")
       sentTo.add(recipientKey);
     } catch (err) {
       console.error(`Failed to send message to ${full_name}:`, err);
