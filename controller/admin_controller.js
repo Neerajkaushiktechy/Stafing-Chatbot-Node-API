@@ -4,6 +4,8 @@ const cookieParser = require('cookie-parser');
 const router = require('../routes/nurseRoutes');
 const pool = require('../db');
 const { sendMessage } = require('../services/sendMessageAPI');
+const { geo_lat_lng } = require('../services/geoLocation');
+const normalizeDate = require('../services/normalizeDates');
 async function admin_login(req, res) {
     try {
         const { email, password } = req.body;
@@ -80,13 +82,15 @@ async function add_facility(req, res) {
                 });
             }
         }
-
+        const geoLoacation = await geo_lat_lng(cityStateZip);
+        const lat = geoLoacation.lat;
+        const lng = geoLoacation.lng;
         const facilityInsert = await client.query(`
             INSERT INTO facilities
-            (name, address, city_state_zip, overtime_multiplier)
-            VALUES ($1, $2, $3, $4)
+            (name, address, city_state_zip, overtime_multiplier, lat, lng)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
-        `, [name, address, cityStateZip,multiplier]);
+        `, [name, address, cityStateZip,multiplier, lat, lng]);
 
         const facilityId = facilityInsert.rows[0].id;
 
@@ -163,7 +167,21 @@ async function edit_facility(req, res) {
                 });
             }
         }
+        const {rows: existing} = await client.query(`
+            SELECT city_state_zip FROM facilities
+            WHERE id = $1
+        `, [id]);
 
+        if (existing[0]?.city_state_zip !== cityStateZip) {
+            const geoLoacation = await geo_lat_lng(cityStateZip);
+            const lat = geoLoacation.lat;
+            const lng = geoLoacation.lng;
+            await client.query(`
+                UPDATE facilities
+                SET lat = $1, lng = $2
+                WHERE id = $3
+            `, [lat, lng, id]);
+        }
         await client.query(`
             UPDATE facilities
             SET name = $1, address = $2, city_state_zip = $3, overtime_multiplier = $4
@@ -254,7 +272,7 @@ async function get_facility(req, res) {
   
       const baseQuery = `
         FROM facilities
-        ${searchTerm ? `WHERE name ILIKE $1 OR city_state_zip ILIKE $1` : ''}
+        ${searchTerm ? `WHERE name ILIKE $1 OR city_state_zip ILIKE $1 or address ILIKE $1` : ''}
       `;
   
       if (noPagination === 'true') {
@@ -380,11 +398,14 @@ async function add_nurse(req,res){
         if(rows.length > 0){
             return res.json({message:"Nurse with this email or phone number already exists", status:400, nurse:rows[0]})
         }
+        const geoLoacation = await geo_lat_lng(location);
+        const lat = geoLoacation.lat;
+        const lng = geoLoacation.lng;
         await pool.query(`
             INSERT INTO nurses
-            (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type, mobile_number,location, shift)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone,location,shift])
+            (first_name, last_name, schedule_name, rate, shift_dif, ot_rate, email, talent_id, nurse_type, mobile_number,location, shift, lat, lng)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [firstName,lastName,scheduleName,rate,shiftDif,otRate,email,talentId,position, phone,location,shift,lat,lng])
         res.json({message:"Nurse added successfully", status:200})
     } catch (error) {
         res.status(500).json({message:"An Error has occured",status:500})
@@ -448,6 +469,20 @@ async function edit_nurse(req,res){
         `,[email,phone,id])
         if(rows.length > 0){
             return res.json({message:"Nurse with this email or phone number already exists", status:400, nurse:rows[0]})
+        }
+        const {rows:existing} = await pool.query(`
+            SELECT location FROM nurses
+            WHERE id = $1
+        `,[id])
+        if(existing[0]?.location !== location){
+            const geoLoacation = await geo_lat_lng(location);
+            const lat = geoLoacation.lat;
+            const lng = geoLoacation.lng;
+            await pool.query(`
+                UPDATE nurses
+                SET lat = $1, lng = $2
+                WHERE id = $3`,
+            [lat, lng, id])
         }
         await pool.query(`
             UPDATE nurses
@@ -849,11 +884,10 @@ async function get_all_shifts(req, res) {
             [facility_id]);
 
         const facilityName = facility[0]?.name || "Unknown Facility";
-
-        const message = `Hello, the shift for ${nurseType} on ${shiftDate} for ${shiftType} shift at ${facilityName} has been deleted by the admin.`;
-
+        const formattedDate = normalizeDate(shiftDate);
+        const message = `Hello, the shift for ${nurseType} on ${formattedDate} for ${shiftType} shift at ${facilityName} has been deleted by the admin.`;
+        console.log('shift date for admin delteion', shiftDate)
         if (phone) sendMessage(phone, message);
-        if (email) sendMessage(email, message);
 
         if (nurse_id) {
             const { rows: nurseContact } = await pool.query(`
@@ -862,11 +896,9 @@ async function get_all_shifts(req, res) {
                 [nurse_id]);
 
             const nursePhone = nurseContact[0]?.mobile_number;
-            const nurseEmail = nurseContact[0]?.email;
 
             if (shiftStatus === 'filled') {
                 if (nursePhone) sendMessage(nursePhone, message);
-                if (nurseEmail) sendMessage(nurseEmail, message);
             }
         }
 
@@ -914,23 +946,34 @@ async function fetch_available_nurses(req, res) {
     try {
         const {facility_id, nurse_type, date, shift} = req.query;
         console.log("FETCH AVAILABLE NURSEs", req.query)
-        const {rows: facility} = await pool.query(`
-            SELECT * FROM facilities
-            WHERE id = $1`,
-            [facility_id])
-        const facilityLocation = facility[0]?.city_state_zip || '';
-        const [city, state, zip] = facilityLocation.split(',').map(part => part.trim()).filter(Boolean);
-        const {rows: nurses} = await pool.query(`
-            SELECT *
-            FROM nurses
-            WHERE nurse_type ILIKE $1
-              AND shift ILIKE $2
-              AND (
-                location ILIKE $3
-                OR location ILIKE $4
-                OR location ILIKE $5
-              )
-        `, [nurse_type, shift, `%${city}%`, `%${state}%`, `%${zip}%`])
+const { rows: facilityRows } = await pool.query(`
+  SELECT lat, lng
+  FROM facilities
+  WHERE id = $1
+`, [facility_id]);
+
+const facility = facilityRows[0];
+if (!facility || !facility.lat || !facility.lng) {
+  return res.status(400).json({ message: "Facility location incomplete." });
+}
+
+const facilityLat = facility.lat;
+const facilityLng = facility.lng;
+const { rows: nurses } = await pool.query(`
+  SELECT *
+  FROM nurses n
+  WHERE nurse_type ILIKE $1
+    AND shift ILIKE $2
+    AND lat IS NOT NULL
+    AND lng IS NOT NULL
+    AND (
+      3959 * acos(
+        cos(radians($3)) * cos(radians(n.lat)) *
+        cos(radians(n.lng) - radians($4)) +
+        sin(radians($3)) * sin(radians(n.lat))
+      )
+    ) <= 50
+`, [nurse_type, shift, facilityLat, facilityLng]);
         const nurseIds = nurses.map(nurse => nurse.id);
         console.log("NURSE IDS", nurseIds)
         if (nurseIds.length === 0) {
@@ -989,12 +1032,9 @@ async function add_shift(req, res) {
         WHERE id = $1`,
         [coordinator])
     const coordinatorPhone = coordinatorDetails[0]?.coordinator_phone || '';
-    const coordinatorEmail = coordinatorDetails[0]?.coordinator_email || '';
-
-    const messageNurse = `A new shift at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift. Notes: ${additionalNotes} has been assigned to you by the admin.`
-    const messageCoordinator = `A new nurse at ${facilityName} ${facilityLocation} on ${scheduleDate} for ${shift} shift has been booked for you by the admin.`
-    sendMessage(nurseEmail, messageNurse)
-    sendMessage(coordinatorEmail, messageCoordinator)
+    const formattedDate = normalizeDate(scheduleDate)
+    const messageNurse = `A new shift at ${facilityName} on ${formattedDate} for ${shift} shift. Notes: ${additionalNotes} has been assigned to you by the admin.`
+    const messageCoordinator = `A new nurse at ${facilityName} on ${formattedDate} for ${shift} shift has been booked for you by the admin.`
     sendMessage(nursePhone, messageNurse)
     sendMessage(coordinatorPhone, messageCoordinator)
         res.json({message:"Shift added successfully", status:200})
@@ -1054,8 +1094,8 @@ async function edit_shift(req, res) {
                     SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
                 `, [oldNurseId]);
                 const oldNurse = oldNurseRows[0];
-                const message = `Hi ${oldNurse.first_name}, your previously assigned shift for ${oldPosition} on ${oldDate} (${oldShift} shift) at ${facilityName} has been reassigned to another nurse. Thank you for your support.`;
-                sendMessage(oldNurse.email, message);
+                const formattedDate = normalizeDate(oldDate);
+                const message = `Hi ${oldNurse.first_name}, your previously assigned shift for ${oldPosition} on ${formattedDate} (${oldShift} shift) at ${facilityName} has been reassigned to another nurse. Thank you for your support.`;
                 sendMessage(oldNurse.mobile_number, message);
             }
 
@@ -1064,8 +1104,8 @@ async function edit_shift(req, res) {
                     SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
                 `, [nurse]);
                 const newNurse = newNurseRows[0];
-                const message = `Hi ${newNurse.first_name}, you've been scheduled for a new ${position} shift on ${scheduleDate} (${shift} shift) at ${facilityName}.Notes: ${additionalNotes}`;
-                sendMessage(newNurse.email, message);
+                const formattedDate = normalizeDate(scheduleDate);
+                const message = `Hi ${newNurse.first_name}, you've been scheduled for a new ${position} shift on ${formattedDate} (${shift} shift) at ${facilityName}.Notes: ${additionalNotes}`;
                 sendMessage(newNurse.mobile_number, message);
             }
         } else if (nurse) {
@@ -1073,8 +1113,8 @@ async function edit_shift(req, res) {
                 SELECT first_name, email, mobile_number FROM nurses WHERE id = $1
             `, [nurse]);
             const nurseDetails = nurseRows[0];
-            const message = `Hi ${nurseDetails.first_name}, there have been updates to your shift: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}.Notes: ${additionalNotes}. Please take note of the changes.`;
-            sendMessage(nurseDetails.email, message);
+            const formattedDate = normalizeDate(scheduleDate);
+            const message = `Hi ${nurseDetails.first_name}, there have been updates to your shift: ${position} on ${formattedDate} (${shift} shift) at ${facilityName}.Notes: ${additionalNotes}. Please take note of the changes.`;
             sendMessage(nurseDetails.mobile_number, message);
         }
 
@@ -1085,8 +1125,8 @@ async function edit_shift(req, res) {
                     SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
                 `, [oldCoordinatorId]);
                 const oldCoordinator = oldCoordinatorRows[0];
-                const message = `Dear ${oldCoordinator.coordinator_first_name}, the coordination responsibility for the ${oldPosition} shift on ${oldDate} (${oldShift} shift) at ${facilityName} has been assigned to another coordinator. Thank you for your efforts.`;
-                sendMessage(oldCoordinator.coordinator_email, message);
+                const formattedDate = normalizeDate(oldDate);
+                const message = `Dear ${oldCoordinator.coordinator_first_name}, the coordination responsibility for the ${oldPosition} shift on ${formattedDate} (${oldShift} shift) at ${facilityName} has been assigned to another coordinator. Thank you for your efforts.`;
                 sendMessage(oldCoordinator.coordinator_phone, message);
             }
 
@@ -1095,8 +1135,8 @@ async function edit_shift(req, res) {
                     SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
                 `, [coordinator]);
                 const newCoordinator = newCoordinatorRows[0];
-                const message = `Dear ${newCoordinator.coordinator_first_name}, you are now responsible for overseeing the ${position} shift on ${scheduleDate} (${shift} shift) at ${facilityName}. Please ensure smooth coordination.`;
-                sendMessage(newCoordinator.coordinator_email, message);
+                const formattedDate = normalizeDate(scheduleDate);
+                const message = `Dear ${newCoordinator.coordinator_first_name}, you are now responsible for overseeing the ${position} shift on ${formattedDate} (${shift} shift) at ${facilityName}. Please ensure smooth coordination.`;
                 sendMessage(newCoordinator.coordinator_phone, message);
             }
         } else if (coordinator) {
@@ -1104,8 +1144,8 @@ async function edit_shift(req, res) {
                 SELECT coordinator_first_name, coordinator_email, coordinator_phone FROM coordinator WHERE id = $1
             `, [coordinator]);
             const coordinatorDetails = coordinatorRows[0];
-            const message = `Dear ${coordinatorDetails.coordinator_first_name}, the shift details under your coordination have been updated. New details: ${position} on ${scheduleDate} (${shift} shift) at ${facilityName}.Additional Notes: ${additionalNotes}. Please review.`;
-            sendMessage(coordinatorDetails.coordinator_email, message);
+            const formattedDate = normalizeDate(scheduleDate);
+            const message = `Dear ${coordinatorDetails.coordinator_first_name}, the shift details under your coordination have been updated. New details: ${position} on ${formattedDate} (${shift} shift) at ${facilityName}.Additional Notes: ${additionalNotes}. Please review.`;
             sendMessage(coordinatorDetails.coordinator_phone, message);
         }
 

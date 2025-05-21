@@ -3,7 +3,7 @@ require('dotenv').config();
 const pool = require('../db.js');
 // Initialize GoogleGenAI with your API key
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
+const current_date = new Date().toISOString().split('T')[0];
 async function generateReplyFromAI(text, pastMessages) {
   try {
     const response = await ai.models.generateContent({
@@ -69,6 +69,7 @@ json
 "additional_instructions": "The nurse should speak Spanish."
 }
 }
+If the user provides the date as today or tomorrow, use today's date which is ${current_date} to get the date.
 ### Shift Cancellation Management:
 You can also handle shift cancellations. If a user indicates a desire to cancel a shift, prompt for the required details (location, nurse type, shift type, and date). Use the same JSON format for responses, including a cancellation flag set to true.
 ### Example Cancellation Flow:
@@ -303,7 +304,7 @@ async function generateMessageForNurseAI(nurse_type, shift,date, pastMessages, s
     const {name, address} = facility[0]
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
-      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). Shift ID: (shift_id). Kindly tell me the ID of this shify you are interesed in covering" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date) from (start time) to (end time). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
+      contents: ` You are an AI chatbot used to send nurse a message informing them about an opening in a hospital present at their location. The details of the shift are provided to you. Generate a friendly text like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date). Shift ID: (shift_id). Kindly tell me the ID of this shify you are interesed in covering" or a something like this which informs the nurse about the shift and sounds friendly. You will also be given the past message history for a nurse so if you see that a nurse has said yes to a shift at a certain hospital before send her a message like "Hello a (nurse type) is required at (hospital) hospital in (shift) shift on (date). You have worked there before.Are you interesed in covering this shift". Make use of past messages if you can to make the messages more friendly.
       Here are the required details.
       1. Nurse type: ${nurse_type}
       2. Shift: ${shift}

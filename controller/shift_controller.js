@@ -2,6 +2,7 @@ const pool = require('../db.js');
 const { search_nurses, send_nurses_message, check_nurse_availability } = require('./nurse_controller.js');
 const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
+const normalizeDate = require('../services/normalizeDates.js');
 
 async function create_shift(created_by,nurse_type, shift,date, additional_instructions, nurse_id=null, status="open")
 {
@@ -90,8 +91,8 @@ async function search_shift(nurse_type, shift,date,created_by) {
               console.error(`Error fetching nurse name for id ${shift.nurse_id}:`, err.message);
             }
           }
-      
-          message += `${i + 1}. ${shift.nurse_type} nurse (${nurse_name}) at ${name}, ${location} on ${shift.date}\n ID:${shift.id}\n`;
+          const formattedDate = normalizeDate(shift.date);
+          message += `${i + 1}. ${shift.nurse_type} nurse (${nurse_name}) at ${name}, ${location} on ${formattedDate}\n ID:${shift.id}\n`;
         }
       
         message += `\nPlease reply with the number of the shift you'd like to cancel.`;
@@ -108,7 +109,8 @@ async function search_shift(nurse_type, shift,date,created_by) {
 async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,location,date,name) {
   try {
     await pool.query(`DELETE FROM shift_tracker WHERE id = $1`, [shift_id]);
-    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift_value} at ${location} scheduled on ${date} has been cancelled succesfully`
+    const formattedDate = normalizeDate(date);
+    const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift_value} at ${name} scheduled on ${formattedDate} has been cancelled succesfully`
     await sendMessage(created_by,message)
         
        if (nurse_id){
@@ -119,7 +121,8 @@ async function delete_shift(shift_id,created_by,nurse_id,nurse_type,shift_value,
             `, [nurse_id]
           )
           const nurse_phoneNumber = rows[0].mobile_number
-          const message = `The shift you confirmed scheduled on ${date} at ${name},${location} has been cancelled by the coordinator. We are sorry for any inconvinience caused`
+          const formattedDate = normalizeDate(date);
+          const message = `The shift you confirmed scheduled on ${formattedDate} at ${name} has been cancelled by the coordinator. We are sorry for any inconvinience caused`
           await sendMessage(nurse_phoneNumber,message)
        }
      
@@ -166,7 +169,8 @@ async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
 
     if (rows.length === 0) {
       // 🔹 Improvement: Early return to avoid nesting
-      const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift scheduled on ${date} does not exist or has been deleted already.`;
+      const formattedDate = normalizeDate(date);
+      const message = `The cancellation request you raised for the ${nurse_type} nurse for ${shift} shift scheduled on ${formattedDate} does not exist or has been deleted already.`;
       await sendMessage(phoneNumber, message);
       return;
     }
@@ -190,7 +194,8 @@ async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
     const location = facility[0]?.city_state_zip || '';
     const name = facility[0]?.name || '';
     // 🔹 Message to nurse
-    const messageToNurse = `The shift you confirmed at ${name}, ${location} on ${date} for ${nurse_type} has been cancelled.`;
+    let formattedDate = normalizeDate(date);
+    const messageToNurse = `The shift you confirmed at ${name} on ${formattedDate} for ${nurse_type} has been cancelled.`;
     await sendMessage(phoneNumber, messageToNurse)
 
     // 🔹 Fetch nurses and exclude sender
@@ -207,8 +212,8 @@ async function shift_cancellation_nurse(nurse_type, shift,date, phoneNumber) {
     const coordinator_phone = coordinator[0].coordinator_phone;
     const coordinator_email = coordinator[0].coordinator_email;
     // 🔹 Notify hospital/requester
-    const messageToCreator = `Hello! Your shift request at ${name}, ${location}, on ${date} for a ${nurse_type} nurse has been cancelled by the nurse. We are looking for another to help cover it. Sorry for any inconvenience caused.`;
-    await sendMessage(coordinator_email, messageToCreator);
+    formattedDate = normalizeDate(date);
+    const messageToCreator = `Hello! Your shift request at ${name} on ${formattedDate} for a ${nurse_type} nurse has been cancelled by the nurse. We are looking for another to help cover it. Sorry for any inconvenience caused.`;
     await sendMessage(coordinator_phone, messageToCreator);
 
   } catch (error) {
@@ -228,32 +233,44 @@ async function check_shift_validity(shift_id, nursePhoneNumber) {
     await sendMessage(nursePhoneNumber, message);
     return false;
   }
-  const { shift, facility_id, nurse_type: type } = shiftQuery.rows[0];
-
+  const { shift, facility_id, nurse_type: type} = shiftQuery.rows[0];
+  const {rows: facility} = await pool.query(`
+    SELECT lat, lng
+    FROM facilities
+    WHERE id = $1
+  `, [facility_id]);
+  const facilityLat = facility[0].lat;
+  const facilityLng = facility[0].lng;
   const nurseQuery = await pool.query(`
-    SELECT id, shift, location, nurse_type
+    SELECT id, shift, location, nurse_type, lat,lng
     FROM nurses
     WHERE mobile_number = $1
   `, [nursePhoneNumber]);
 
   if (nurseQuery.rows.length === 0) return false;
-  const {rows:location} = await pool.query(`
-    SELECT city_state_zip
-    FROM facilities
-    WHERE id = $1
-  `, [facility_id]);
-  const facilityLocation = location[0].city_state_zip;
   const {
     id: nurseId,
     shift: nurseShift,
     location: nurseLocation,
     nurse_type: nurseType,
+    lat: nurseLat,
+    lng: nurseLng
   } = nurseQuery.rows[0];
-  const [city, state, zip] = facilityLocation.split(',').map(part => part.trim()).filter(Boolean);
-  const locationMatch =
-  nurseLocation.toLowerCase().includes(city?.toLowerCase() || '') ||
-  nurseLocation.toLowerCase().includes(state?.toLowerCase() || '') ||
-  nurseLocation.toLowerCase().includes(zip?.toLowerCase() || '');
+
+  function haversineDistance(lat1, lon1, lat2, lon2) {
+  const toRad = deg => (deg * Math.PI) / 180;
+  const R = 3959; // Earth radius in miles
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+const distance = haversineDistance(facilityLat, facilityLng, nurseLat, nurseLng);
+const locationMatch = distance <= 50;
 
   if (
     shift.toLowerCase() !== nurseShift.toLowerCase() ||
