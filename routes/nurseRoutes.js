@@ -1,7 +1,7 @@
 const express = require('express');
 const { generateReplyFromAINurse } = require('../helper/promptHelper.js');
 const router = express.Router();
-const {update_coordinator} = require('../controller/coordinator_controller.js');
+const {update_coordinator, update_coordinator_chat_history} = require('../controller/coordinator_controller.js');
 const { check_shift_status, search_shift, shift_cancellation_nurse, check_shift_validity} = require('../controller/shift_controller.js');
 const { update_nurse_chat_history, get_nurse_chat_data, follow_up_reply } = require('../controller/nurse_controller.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
@@ -61,7 +61,9 @@ router.post('/chat_nurse', async (req, res) => {
         }
         
         if(replyMessage.follow_up_reply){
-            await follow_up_reply(sender, replyMessage.coordinator_message)
+            const {coordinator_email, coordinator_phone} = await follow_up_reply(sender, replyMessage.coordinator_message)
+            update_coordinator_chat_history(coordinator_email,replyMessage.coordinator_message, "sent")
+            update_coordinator_chat_history(coordinator_phone,replyMessage.coordinator_message, "sent")
         }
     } catch (error) {
         console.error('Error generating response:', error);
