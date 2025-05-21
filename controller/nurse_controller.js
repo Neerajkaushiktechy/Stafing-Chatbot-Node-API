@@ -1,7 +1,6 @@
 const { generateMessageForNurseAI } = require('../helper/promptHelper.js');
 const pool = require('../db.js');
 const { sendMessage } = require('../services/sendMessageAPI.js');
-const { update_coordinator_chat_history } = require('./coordinator_controller.js');
 require('dotenv').config();
 async function search_nurses(nurse_type, shift, shift_id) {
   try {
@@ -12,28 +11,30 @@ async function search_nurses(nurse_type, shift, shift_id) {
     
     const { facility_id } = rows[0];
 
-    const { rows: addressRows } = await pool.query(`
-      SELECT city_state_zip FROM facilities
+    const { rows: facilityRows } = await pool.query(`
+      SELECT lat, lng FROM facilities
       WHERE id = $1
     `, [facility_id]);
+    
+    const facility = facilityRows[0];
+    if (!facility || !facility.lat || !facility.lng) {
+      throw new Error('Facility does not have valid coordinates.');
+    }
+    const { rows: nurseCandidates } = await pool.query(`
+      SELECT n.*
+      FROM nurses n
+      WHERE n.nurse_type ILIKE $3
+        AND n.shift ILIKE $4
+  AND (
+    3959 * acos(
+      cos(radians($1)) * cos(radians(n.lat)) *
+      cos(radians(n.lng) - radians($2)) +
+      sin(radians($1)) * sin(radians(n.lat))
+    )
+  ) <= 50
+    `, [facility.lat, facility.lng, nurse_type, shift]);
 
-    const full_location = addressRows[0]?.city_state_zip || '';
-
-    // Split location into parts like ["Brooklyn", "NYC", "1231"]
-    const [city, state, zip] = full_location.split(',').map(part => part.trim()).filter(Boolean);
-    const result = await pool.query(`
-      SELECT *
-      FROM nurses
-      WHERE nurse_type ILIKE $1
-        AND shift ILIKE $2
-        AND (
-          location ILIKE $3
-          OR location ILIKE $4
-          OR location ILIKE $5
-        )
-    `, [nurse_type, shift, `%${city}%`, `%${state}%`, `%${zip}%`]);
-
-    return result.rows;
+    return nurseCandidates;
 
   } catch (err) {
     console.error('Error searching nurses:', err);
@@ -138,15 +139,17 @@ async function follow_up_reply(sender,message){
 
   const coordinator_id = shifts[0].coordinator_id
   const {rows: coordinator} = await pool.query(`
-    SELECT coordinator_email
+    SELECT coordinator_email, coordinator_phone
     FROM coordinator
     WHERE id = $1
   `,[coordinator_id])
   const coordinator_email = coordinator[0].coordinator_email
   const coordinator_phone = coordinator[0].coordinator_phone
-  await sendMessage(coordinator_email,message)
   await sendMessage(coordinator_phone,message)
-  await update_coordinator_chat_history(sender,message,"sent")
+  return {
+    coordinator_email,
+    coordinator_phone
+  }
 }
 module.exports = {
     search_nurses,
